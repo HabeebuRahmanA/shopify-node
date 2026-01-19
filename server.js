@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 3000;
 
 // Basic health check route
 app.get('/', (req, res) => {
-  res.send('Server is running');
+  res.send('Server is running by vdroid');
 });
 
 // Main API route returning "hello"
