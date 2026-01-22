@@ -1,8 +1,11 @@
-4
-const express = require('express');
+// Load environment variables - only in development
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({ path: '.env.development.local' });
+}const express = require('express');
 const nodemailer = require('nodemailer');
 const app = express();
 const PORT = process.env.PORT || 3001;
+const db = require('./db/db');
 
 app.use(express.json());
 
@@ -16,8 +19,8 @@ const transporter = nodemailer.createTransport({
 });
 
 // In-memory storage for OTPs
-const otpStore = {};
-const usersStore = {};
+// const otpStore = {};
+// send-otpapp.post('/auth/send-otp'const usersStore = {};
 
 // Utility: Generate random 6-digit OTP
 function generateOTP() {
@@ -80,8 +83,8 @@ app.post('/auth/send-otp', async (req, res) => {
   const otp = generateOTP();
   const expiresAt = Date.now() + 10 * 60 * 1000;
 
-  otpStore[email] = { code: otp, expiresAt };
-  
+  await db.storeOTP(email, otp, new Date(expiresAt));
+
   const emailResult = await sendOTPEmail(email, otp);
   
   if (!emailResult.success) {
@@ -96,41 +99,35 @@ app.post('/auth/send-otp', async (req, res) => {
 });
 
 // Step 2: Verify OTP
-app.post('/auth/verify-otp', (req, res) => {
+app.post('/auth/verify-otp', async (req, res) => {
   const { email, otp } = req.body;
 
   if (!email || !otp) {
     return res.status(400).json({ error: 'Email and OTP required' });
   }
 
-  const stored = otpStore[email];
-
+  const stored = await db.getOTP(email);
   if (!stored) {
     return res.status(400).json({ error: 'OTP not found' });
   }
 
   if (Date.now() > stored.expiresAt) {
-    delete otpStore[email];
-    return res.status(400).json({ error: 'OTP expired' });
+//     delete otpStore[email];
+//     return res.status(400).json({ error: 'OTP expired' });
   }
 
   if (stored.code !== otp) {
     return res.status(400).json({ error: 'Invalid OTP' });
   }
 
-  if (!usersStore[email]) {
-    usersStore[email] = {
-      id: `user_${Date.now()}`,
-      email,
-      name: email.split('@')[0],
-      createdAt: new Date().toISOString(),
-    };
+// Create or get user from database
+  let user = await db.getUser(email);
+  if (!user) {
+    user = await db.createUser(email, email.split('@')[0]);
   }
-
-  const user = usersStore[email];
+//   const user = usersStore[email];
   const token = generateToken(email);
-  delete otpStore[email];
-
+  await db.deleteOTP(email);
   res.json({
     success: true,
     message: 'Login successful',

@@ -1,4 +1,29 @@
 node_modules
 npm-debug.log*
 .DS_Store
-.env
+.env*
+.env.development.local
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Dependencies
+node_modules/
+
+# Production
+build/
+dist/

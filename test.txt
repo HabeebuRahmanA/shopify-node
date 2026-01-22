@@ -1,0 +1,3 @@
+ curl -X POST https://shopify-node-nu.vercel.app/test-email \
+  -H "Content-Type: application/json" \
+  -d '{"email":"abibiaaib@gmail.com"}'
