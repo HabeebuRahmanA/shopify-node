@@ -1,3 +1,18 @@
  curl -X POST https://shopify-node-nu.vercel.app/test-email \
   -H "Content-Type: application/json" \
   -d '{"email":"abibiaaib@gmail.com"}'
+
+
+curl -X POST http://localhost:3001/auth/send-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"abibiaaib@gmail.com"}'
+
+curl -X POST https://shopify-node-nu.vercel.app/auth/send-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"abibiaaib@gmail.com"}'
+
+https://shopify-node-3v4iytnaa-habis-projects-8db5efed.vercel.app/
+
+curl -X POST https://shopify-node-3v4iytnaa-habis-projects-8db5efed.vercel.app//auth/send-otp \
+  -H "Content-Type: application/json" \
+  -d '{"email":"abibiaaib@gmail.com"}'
