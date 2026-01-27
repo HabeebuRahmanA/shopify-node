@@ -235,6 +235,100 @@ async function getCustomerDataStorefront(email) {
   }
 }
 
+// Get customer orders using Admin API
+router.post('/orders/get-orders', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+
+  try {
+    console.log('🔍 [ORDERS] Fetching orders for email:', email);
+    
+    const query = `
+      query {
+        customers(first: 1, query: "email:${email}") {
+          edges {
+            node {
+              id
+              email
+              orders(first: 20, reverse: true) {
+                edges {
+                  node {
+                    id
+                    name
+                    orderNumber
+                    processedAt
+                    createdAt
+                    totalPriceV2 {
+                      amount
+                      currencyCode
+                    }
+                    financialStatus
+                    fulfillmentStatus
+                    displayFinancialStatus
+                    displayFulfillmentStatus
+                    lineItems(first: 10) {
+                      edges {
+                        node {
+                          title
+                          quantity
+                          originalUnitPriceSet {
+                            shopMoney {
+                              amount
+                              currencyCode
+                            }
+                          }
+                        }
+                      }
+                    }
+                    shippingAddress {
+                      address1
+                      address2
+                      city
+                      province
+                      zip
+                      country
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const data = await queryShopifyAdmin(query);
+    console.log('📊 [ORDERS] Shopify response:', JSON.stringify(data, null, 2));
+    
+    if (data.customers.edges.length > 0) {
+      const customer = data.customers.edges[0].node;
+      const orders = customer.orders.edges.map(edge => edge.node);
+      
+      console.log('✅ [ORDERS] Found ${orders.length} orders for customer');
+      
+      res.json({
+        success: true,
+        orders: orders,
+        count: orders.length,
+      });
+    } else {
+      console.log('⚠️ [ORDERS] No customer found for email:', email);
+      res.json({
+        success: true,
+        orders: [],
+        count: 0,
+      });
+    }
+  } catch (error) {
+    console.error('🔥 [ORDERS] Error fetching orders:', error.message);
+    console.error('🔥 [ORDERS] Full error:', error);
+    res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
 // Export the functions for use in other routes
 module.exports = {
   router,
