@@ -2,8 +2,18 @@ const express = require('express');
 const router = express.Router();
 
 // Shopify Admin API GraphQL endpoint
-const SHOPIFY_ADMIN_API_URL = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/graphql.json`;
+const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
 const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+
+console.log('🔍 [INIT] Shopify environment variables check:');
+console.log('🔍 [INIT] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
+console.log('🔍 [INIT] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+
+if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ACCESS_TOKEN) {
+  console.error('🔥 [INIT] Missing required Shopify environment variables!');
+}
+
+const SHOPIFY_ADMIN_API_URL = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/graphql.json`;
 
 // Helper function to query Shopify Admin API
 async function queryShopifyAdmin(query, variables = {}) {
@@ -40,6 +50,15 @@ async function queryShopifyAdmin(query, variables = {}) {
 // Check if customer exists in Shopify
 async function checkShopifyCustomerExists(email) {
   try {
+    // Check if environment variables are set
+    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ACCESS_TOKEN) {
+      throw new Error('Shopify environment variables not configured');
+    }
+
+    console.log('🔍 [SHOPIFY] Checking customer existence for email:', email);
+    console.log('🔍 [SHOPIFY] Store domain:', SHOPIFY_STORE_DOMAIN);
+    console.log('🔍 [SHOPIFY] Admin API URL:', SHOPIFY_ADMIN_API_URL);
+    
     const query = `
       query {
         customers(first: 1, query: "email:${email}") {
@@ -53,11 +72,27 @@ async function checkShopifyCustomerExists(email) {
       }
     `;
 
+    console.log('📡 [SHOPIFY] Sending GraphQL query...');
+    
     const data = await queryShopifyAdmin(query);
-    return data.customers.edges.length > 0;
+    
+    console.log('📊 [SHOPIFY] GraphQL response:', JSON.stringify(data, null, 2));
+    
+    const customerCount = data.customers.edges.length;
+    console.log('📊 [SHOPIFY] Customers found:', customerCount);
+    
+    if (customerCount > 0) {
+      const customer = data.customers.edges[0].node;
+      console.log('✅ [SHOPIFY] Customer found:', customer.email);
+    }
+    
+    return customerCount > 0;
   } catch (error) {
-    console.error('Error checking Shopify customer:', error);
-    return false;
+    console.error('🔥 [SHOPIFY] Error checking Shopify customer:', error.message);
+    console.error('🔥 [SHOPIFY] Full error:', error);
+    
+    // Re-throw the error so it can be caught and handled properly
+    throw error;
   }
 }
 
