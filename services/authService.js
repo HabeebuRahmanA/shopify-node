@@ -34,7 +34,7 @@ async function getShopifyCustomerDetails(email, forceRefresh = false) {
                 phone
                 createdAt
                 numberOfOrders
-                totalSpent
+                ordersCount
                 state
                 defaultAddress {
                   address1
@@ -45,16 +45,12 @@ async function getShopifyCustomerDetails(email, forceRefresh = false) {
                   country
                 }
                 addresses(first: 5) {
-                  edges {
-                    node {
-                      address1
-                      address2
-                      city
-                      province
-                      zip
-                      country
-                    }
-                  }
+                  address1
+                  address2
+                  city
+                  province
+                  zip
+                  country
                 }
               }
             }
@@ -76,11 +72,11 @@ async function getShopifyCustomerDetails(email, forceRefresh = false) {
           lastName: customer.lastName,
           phone: customer.phone,
           createdAt: customer.createdAt,
-          numberOfOrders: customer.numberOfOrders,
-          totalSpent: customer.totalSpent,
+          numberOfOrders: customer.numberOfOrders || customer.ordersCount,
+          totalSpent: 0, // Not available in this query
           state: customer.state,
           defaultAddress: customer.defaultAddress,
-          addresses: customer.addresses.edges.map(edge => edge.node),
+          addresses: customer.addresses || [],
           dataSource: 'admin'
         };
       } else {
