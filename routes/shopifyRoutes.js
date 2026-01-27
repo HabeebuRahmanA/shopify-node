@@ -267,12 +267,12 @@ router.post('/orders/get-orders', async (req, res) => {
                     orderNumber
                     processedAt
                     createdAt
-                    totalPriceV2 {
-                      amount
-                      currencyCode
+                    totalPriceSet {
+                      shopMoney {
+                        amount
+                        currencyCode
+                      }
                     }
-                    financialStatus
-                    fulfillmentStatus
                     displayFinancialStatus
                     displayFulfillmentStatus
                     lineItems(first: 10) {
