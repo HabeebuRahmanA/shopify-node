@@ -114,6 +114,10 @@ async function getOrCreateUser(email, forceRefresh = false) {
       // Merge Shopify data with local user data
       user = { ...user, ...shopifyCustomer };
       console.log('✅ [AUTH] Enriched user data with Shopify details');
+      
+      // Update database with fresh data
+      await db.updateUserShopifyData(email, shopifyCustomer);
+      console.log('💾 [AUTH] Updated database with Shopify data');
     }
   } catch (error) {
     console.log('⚠️ [AUTH] Could not fetch Shopify customer details, using local data');

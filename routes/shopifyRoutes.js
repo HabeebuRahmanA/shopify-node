@@ -138,9 +138,28 @@ async function getCustomerDataStorefront(email) {
   try {
     console.log('🔍 [STOREFRONT] Fetching customer data for email:', email);
     
+    // Note: Storefront API customer query requires customer access token, not just email
+    // For now, let's return a basic structure and we'll implement OAuth later
+    console.log('⚠️ [STOREFRONT] Storefront API needs customer access token - using fallback');
+    
+    // Fallback: Return basic data without Storefront API call
+    // In a full implementation, you'd need OAuth flow to get customer access token
+    return {
+      email: email,
+      name: email.split('@')[0],
+      phone: null,
+      createdAt: null,
+      numberOfOrders: 0,
+      defaultAddress: null,
+      addresses: [],
+      orders: [],
+      dataSource: 'storefront_fallback'
+    };
+    
+    /* Full Storefront API implementation (requires customer access token):
     const query = `
       query {
-        customer(email: "${email}") {
+        customer(customerAccessToken: "${customerAccessToken}") {
           id
           email
           firstName
@@ -209,6 +228,7 @@ async function getCustomerDataStorefront(email) {
     }
     
     return null;
+    */
   } catch (error) {
     console.error('🔥 [STOREFRONT] Error fetching customer data:', error.message);
     throw error;

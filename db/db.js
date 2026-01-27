@@ -143,6 +143,23 @@ const db = {
       throw error;
     }
   },
+
+  // Update user with Shopify data
+  async updateUserShopifyData(email, shopifyData) {
+    try {
+      await sql`
+        UPDATE users 
+        SET 
+          name = ${shopifyData.name || email.split('@')[0]},
+          updated_at = NOW()
+        WHERE email = ${email}
+      `;
+      return true;
+    } catch (error) {
+      console.error('Error updating user Shopify data:', error);
+      throw error;
+    }
+  },
 };
 
 module.exports = db;
