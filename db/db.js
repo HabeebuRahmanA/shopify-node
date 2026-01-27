@@ -151,6 +151,12 @@ const db = {
         UPDATE users 
         SET 
           name = ${shopifyData.name || email.split('@')[0]},
+          phone = ${shopifyData.phone || null},
+          shopify_id = ${shopifyData.id || null},
+          shopify_created_at = ${shopifyData.createdAt || null},
+          number_of_orders = ${shopifyData.numberOfOrders || 0},
+          total_spent = ${shopifyData.totalSpent || 0},
+          data_source = ${shopifyData.dataSource || 'unknown'},
           updated_at = NOW()
         WHERE email = ${email}
       `;

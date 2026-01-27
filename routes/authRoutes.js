@@ -164,21 +164,8 @@ router.post('/auth/validate', async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    // Fetch fresh data using Storefront API for auto-login
-    try {
-      const freshUserData = await getOrCreateUser(user.email, false); // false = use Storefront API
-      if (freshUserData) {
-        console.log('✅ [AUTH VALIDATE] Fresh data fetched for user:', user.email);
-        return res.json({
-          success: true,
-          user: freshUserData
-        });
-      }
-    } catch (error) {
-      console.log('⚠️ [AUTH VALIDATE] Could not fetch fresh data, using cached data');
-    }
-
     console.log('✅ [AUTH VALIDATE] Session valid for user:', user.email);
+    console.log('📊 [AUTH VALIDATE] Using cached user data from database');
     
     res.json({
       success: true,
