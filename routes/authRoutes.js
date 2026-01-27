@@ -110,6 +110,7 @@ router.post('/auth/verify-otp', async (req, res) => {
 
     // Create or get user from database (force refresh for fresh login)
     const user = await getOrCreateUser(email, true); // true = use Admin API
+    console.log('📊 [OTP VERIFY] User data after getOrCreateUser:', JSON.stringify(user, null, 2));
     const token = generateToken(email);
     
     // Store session in database
