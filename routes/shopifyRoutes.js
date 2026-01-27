@@ -264,7 +264,7 @@ router.post('/orders/get-orders', async (req, res) => {
                   node {
                     id
                     name
-                    orderNumber
+                    number
                     processedAt
                     createdAt
                     totalPriceSet {
