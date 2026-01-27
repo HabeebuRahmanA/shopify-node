@@ -12,11 +12,11 @@ function generateToken(email) {
 // Fetch customer details from Shopify (Hybrid approach)
 async function getShopifyCustomerDetails(email, forceRefresh = false) {
   try {
+    console.log('🔍 [AUTH] Fetching customer details for email:', email, 'forceRefresh:', forceRefresh);
+    
     // Import here to avoid circular dependency
     const shopifyRoutes = require('../routes/shopifyRoutes');
     const { queryShopifyAdmin, getCustomerDataStorefront } = shopifyRoutes;
-    
-    console.log('🔍 [AUTH] Fetching customer details for email:', email);
     
     // For fresh login or force refresh, use Admin API to get complete data
     if (forceRefresh) {
@@ -63,6 +63,7 @@ async function getShopifyCustomerDetails(email, forceRefresh = false) {
       `;
 
       const data = await queryShopifyAdmin(query);
+      console.log('📊 [AUTH] Admin API response:', JSON.stringify(data, null, 2));
       
       if (data.customers.edges.length > 0) {
         const customer = data.customers.edges[0].node;
@@ -82,6 +83,8 @@ async function getShopifyCustomerDetails(email, forceRefresh = false) {
           addresses: customer.addresses.edges.map(edge => edge.node),
           dataSource: 'admin'
         };
+      } else {
+        console.log('⚠️ [AUTH] No customer found in Admin API for email:', email);
       }
     } else {
       // For session validation, use Storefront API for fresh data
@@ -95,7 +98,8 @@ async function getShopifyCustomerDetails(email, forceRefresh = false) {
     
     return null;
   } catch (error) {
-    console.error('Error fetching Shopify customer details:', error);
+    console.error('🔥 [AUTH] Error fetching Shopify customer details:', error.message);
+    console.error('🔥 [AUTH] Full error:', error);
     return null;
   }
 }
@@ -116,8 +120,13 @@ async function getOrCreateUser(email, forceRefresh = false) {
       console.log('✅ [AUTH] Enriched user data with Shopify details');
       
       // Update database with fresh data
-      await db.updateUserShopifyData(email, shopifyCustomer);
-      console.log('💾 [AUTH] Updated database with Shopify data');
+      try {
+        await db.updateUserShopifyData(email, shopifyCustomer);
+        console.log('💾 [AUTH] Updated database with Shopify data');
+      } catch (dbError) {
+        console.log('⚠️ [AUTH] Database update failed, but continuing:', dbError.message);
+        // Don't fail the login, just continue with the data we have
+      }
     }
   } catch (error) {
     console.log('⚠️ [AUTH] Could not fetch Shopify customer details, using local data');
