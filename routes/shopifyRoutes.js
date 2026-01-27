@@ -246,6 +246,12 @@ router.post('/orders/get-orders', async (req, res) => {
   try {
     console.log('🔍 [ORDERS] Fetching orders for email:', email);
     
+    // Check if environment variables are set
+    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
+      console.error('🔥 [ORDERS] Missing Shopify environment variables');
+      return res.status(500).json({ error: 'Shopify configuration missing' });
+    }
+    
     const query = `
       query {
         customers(first: 1, query: "email:${email}") {
@@ -300,6 +306,7 @@ router.post('/orders/get-orders', async (req, res) => {
       }
     `;
 
+    console.log('📡 [ORDERS] Sending GraphQL query to Shopify...');
     const data = await queryShopifyAdmin(query);
     console.log('📊 [ORDERS] Shopify response:', JSON.stringify(data, null, 2));
     
@@ -325,6 +332,16 @@ router.post('/orders/get-orders', async (req, res) => {
   } catch (error) {
     console.error('🔥 [ORDERS] Error fetching orders:', error.message);
     console.error('🔥 [ORDERS] Full error:', error);
+    
+    // Check if it's a GraphQL error
+    if (error.message && error.message.includes('GraphQL')) {
+      console.error('🔥 [ORDERS] GraphQL error detected');
+      return res.status(500).json({ 
+        error: 'Shopify API error',
+        details: error.message 
+      });
+    }
+    
     res.status(500).json({ error: 'Failed to fetch orders' });
   }
 });
