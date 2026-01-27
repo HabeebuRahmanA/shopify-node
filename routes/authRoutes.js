@@ -4,6 +4,7 @@ const router = express.Router();
 const db = require('../db/db');
 const { sendOTPEmail } = require('../services/emailService');
 const { generateOTP, generateToken, getOrCreateUser } = require('../services/authService');
+const { checkShopifyCustomerExists } = require('./shopifyRoutes');
 
 router.get('/', (req, res) => {
   res.json({ message: 'Server running', api: 'Shopify OTP Auth' });
@@ -29,22 +30,36 @@ router.post('/auth/send-otp', async (req, res) => {
     return res.status(400).json({ error: 'Valid email required' });
   }
 
-  const otp = generateOTP();
-  const expiresAt = Date.now() + 10 * 60 * 1000;
+  try {
+    // Check if customer exists in Shopify first
+    const customerExists = await checkShopifyCustomerExists(email);
+    
+    if (!customerExists) {
+      return res.status(404).json({ 
+        error: 'Email not found in our store. Please use the email associated with your Shopify account.' 
+      });
+    }
 
-  await db.storeOTP(email, otp, new Date(expiresAt));
+    const otp = generateOTP();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
 
-  const emailResult = await sendOTPEmail(email, otp);
-  
-  if (!emailResult.success) {
-    return res.status(500).json({ error: 'Failed to send email' });
+    await db.storeOTP(email, otp, new Date(expiresAt));
+
+    const emailResult = await sendOTPEmail(email, otp);
+    
+    if (!emailResult.success) {
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP sent to email',
+      email,
+    });
+  } catch (error) {
+    console.error('Error in send-otp:', error);
+    res.status(500).json({ error: 'Server error. Please try again.' });
   }
-
-  res.json({
-    success: true,
-    message: 'OTP sent to email',
-    email,
-  });
 });
 
 // Step 2: Verify OTP

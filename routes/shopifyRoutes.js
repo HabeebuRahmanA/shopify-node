@@ -37,6 +37,36 @@ async function queryShopifyAdmin(query, variables = {}) {
   }
 }
 
+// Check if customer exists in Shopify
+async function checkShopifyCustomerExists(email) {
+  try {
+    const query = `
+      query {
+        customers(first: 1, query: "email:${email}") {
+          edges {
+            node {
+              id
+              email
+            }
+          }
+        }
+      }
+    `;
+
+    const data = await queryShopifyAdmin(query);
+    return data.customers.edges.length > 0;
+  } catch (error) {
+    console.error('Error checking Shopify customer:', error);
+    return false;
+  }
+}
+
+// Export the function for use in other routes
+module.exports = {
+  router,
+  checkShopifyCustomerExists
+};
+
 // Step 1: Auth Callback - Handle Shopify OAuth redirect
 router.get('/auth/callback', async (req, res) => {
   try {
