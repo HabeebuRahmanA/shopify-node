@@ -3,13 +3,18 @@ const router = express.Router();
 
 // Shopify Admin API GraphQL endpoint
 const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+
+// Shopify Storefront API GraphQL endpoint
+const SHOPIFY_STOREFRONT_ACCESS_TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
+const SHOPIFY_STOREFRONT_API_URL = `https://${SHOPIFY_STORE_DOMAIN}/api/2024-01/graphql.json`;
 
 console.log('🔍 [INIT] Shopify environment variables check:');
 console.log('🔍 [INIT] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
-console.log('🔍 [INIT] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+console.log('🔍 [INIT] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ADMIN_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+console.log('🔍 [INIT] SHOPIFY_STOREFRONT_ACCESS_TOKEN:', SHOPIFY_STOREFRONT_ACCESS_TOKEN ? 'SET' : 'NOT SET');
 
-if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ACCESS_TOKEN) {
+if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN || !SHOPIFY_STOREFRONT_ACCESS_TOKEN) {
   console.error('🔥 [INIT] Missing required Shopify environment variables!');
 }
 
@@ -22,7 +27,7 @@ async function queryShopifyAdmin(query, variables = {}) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+        'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
       },
       body: JSON.stringify({
         query,
@@ -42,7 +47,39 @@ async function queryShopifyAdmin(query, variables = {}) {
 
     return data.data;
   } catch (error) {
-    console.error('Shopify API query error:', error);
+    console.error('Shopify Admin API query error:', error);
+    throw error;
+  }
+}
+
+// Helper function to query Shopify Storefront API
+async function queryShopifyStorefront(query, variables = {}) {
+  try {
+    const response = await fetch(SHOPIFY_STOREFRONT_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Storefront-Access-Token': SHOPIFY_STOREFRONT_ACCESS_TOKEN,
+      },
+      body: JSON.stringify({
+        query,
+        variables,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Shopify Storefront API error: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.errors) {
+      throw new Error(`Storefront GraphQL error: ${JSON.stringify(data.errors)}`);
+    }
+
+    return data.data;
+  } catch (error) {
+    console.error('Shopify Storefront API query error:', error);
     throw error;
   }
 }
@@ -51,7 +88,7 @@ async function queryShopifyAdmin(query, variables = {}) {
 async function checkShopifyCustomerExists(email) {
   try {
     // Check if environment variables are set
-    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ACCESS_TOKEN) {
+    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
       throw new Error('Shopify environment variables not configured');
     }
 
@@ -96,10 +133,95 @@ async function checkShopifyCustomerExists(email) {
   }
 }
 
-// Export the function for use in other routes
+// Fetch customer data using Storefront API (for fresh data on app start)
+async function getCustomerDataStorefront(email) {
+  try {
+    console.log('🔍 [STOREFRONT] Fetching customer data for email:', email);
+    
+    const query = `
+      query {
+        customer(email: "${email}") {
+          id
+          email
+          firstName
+          lastName
+          phone
+          createdAt
+          numberOfOrders
+          addresses(first: 5) {
+            edges {
+              node {
+                address1
+                address2
+                city
+                province
+                zip
+                country
+              }
+            }
+          }
+          defaultAddress {
+            address1
+            address2
+            city
+            province
+            zip
+            country
+          }
+          orders(first: 10, reverse: true) {
+            edges {
+              node {
+                id
+                name
+                orderNumber
+                processedAt
+                totalPriceV2 {
+                  amount
+                  currencyCode
+                }
+                financialStatus
+                fulfillmentStatus
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const data = await queryShopifyStorefront(query);
+    
+    if (data.customer) {
+      console.log('✅ [STOREFRONT] Customer data fetched successfully');
+      return {
+        id: data.customer.id,
+        email: data.customer.email,
+        name: `${data.customer.firstName || ''} ${data.customer.lastName || ''}`.trim() || email.split('@')[0],
+        firstName: data.customer.firstName,
+        lastName: data.customer.lastName,
+        phone: data.customer.phone,
+        createdAt: data.customer.createdAt,
+        numberOfOrders: data.customer.numberOfOrders,
+        defaultAddress: data.customer.defaultAddress,
+        addresses: data.customer.addresses?.edges?.map(edge => edge.node) || [],
+        orders: data.customer.orders?.edges?.map(edge => edge.node) || [],
+        dataSource: 'storefront'
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('🔥 [STOREFRONT] Error fetching customer data:', error.message);
+    throw error;
+  }
+}
+
+// Export the functions for use in other routes
 module.exports = {
   router,
-  checkShopifyCustomerExists
+  checkShopifyCustomerExists,
+  getCustomerDataStorefront,
+  queryShopifyAdmin,
+  queryShopifyStorefront
 };
 
 // Step 1: Auth Callback - Handle Shopify OAuth redirect

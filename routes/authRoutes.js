@@ -108,8 +108,8 @@ router.post('/auth/verify-otp', async (req, res) => {
 
     console.log('✅ [OTP VERIFY] OTP validated for email:', email);
 
-    // Create or get user from database
-    const user = await getOrCreateUser(email);
+    // Create or get user from database (force refresh for fresh login)
+    const user = await getOrCreateUser(email, true); // true = use Admin API
     const token = generateToken(email);
     
     // Store session in database
@@ -162,6 +162,20 @@ router.post('/auth/validate', async (req, res) => {
     if (!user) {
       console.log('❌ [AUTH VALIDATE] User not found');
       return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Fetch fresh data using Storefront API for auto-login
+    try {
+      const freshUserData = await getOrCreateUser(user.email, false); // false = use Storefront API
+      if (freshUserData) {
+        console.log('✅ [AUTH VALIDATE] Fresh data fetched for user:', user.email);
+        return res.json({
+          success: true,
+          user: freshUserData
+        });
+      }
+    } catch (error) {
+      console.log('⚠️ [AUTH VALIDATE] Could not fetch fresh data, using cached data');
     }
 
     console.log('✅ [AUTH VALIDATE] Session valid for user:', user.email);
