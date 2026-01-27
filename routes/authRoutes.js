@@ -86,31 +86,117 @@ router.post('/auth/verify-otp', async (req, res) => {
     return res.status(400).json({ error: 'Email and OTP required' });
   }
 
-  const stored = await db.getOTP(email);
-  if (!stored) {
-    return res.status(400).json({ error: 'OTP not found' });
+  try {
+    console.log('🔍 [OTP VERIFY] Verifying OTP for email:', email);
+    
+    const stored = await db.getOTP(email);
+    if (!stored) {
+      console.log('❌ [OTP VERIFY] OTP not found for email:', email);
+      return res.status(400).json({ error: 'OTP not found or expired' });
+    }
+
+    if (Date.now() > stored.expiresAt) {
+      console.log('❌ [OTP VERIFY] OTP expired for email:', email);
+      await db.deleteOTP(email);
+      return res.status(400).json({ error: 'OTP expired' });
+    }
+
+    if (stored.code !== otp) {
+      console.log('❌ [OTP VERIFY] Invalid OTP for email:', email);
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    console.log('✅ [OTP VERIFY] OTP validated for email:', email);
+
+    // Create or get user from database
+    const user = await getOrCreateUser(email);
+    const token = generateToken(email);
+    
+    // Store session in database
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    await db.createSession(user.id, token, expiresAt);
+    
+    console.log('💾 [OTP VERIFY] Session created for user:', user.id);
+    
+    // Clean up OTP
+    await db.deleteOTP(email);
+    
+    res.json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user,
+      expiresIn: '30 days'
+    });
+  } catch (error) {
+    console.error('🔥 [OTP VERIFY] Error:', error.message);
+    console.error('🔥 [OTP VERIFY] Full error:', error);
+    res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+// Validate session
+router.post('/auth/validate', async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ error: 'Token required' });
   }
 
-  if (Date.now() > stored.expiresAt) {
-//     delete otpStore[email];
-//     return res.status(400).json({ error: 'OTP expired' });
+  try {
+    console.log('🔍 [AUTH VALIDATE] Validating token');
+    
+    const session = await db.getSession(token);
+    if (!session) {
+      console.log('❌ [AUTH VALIDATE] Session not found');
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    if (session.revoked || Date.now() > new Date(session.expires_at).getTime()) {
+      console.log('❌ [AUTH VALIDATE] Session expired or revoked');
+      await db.revokeSession(token);
+      return res.status(401).json({ error: 'Session expired' });
+    }
+
+    const user = await db.getUserById(session.user_id);
+    if (!user) {
+      console.log('❌ [AUTH VALIDATE] User not found');
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    console.log('✅ [AUTH VALIDATE] Session valid for user:', user.email);
+    
+    res.json({
+      success: true,
+      user
+    });
+  } catch (error) {
+    console.error('🔥 [AUTH VALIDATE] Error:', error.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Logout
+router.post('/auth/logout', async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.status(400).json({ error: 'Token required' });
   }
 
-  if (stored.code !== otp) {
-    return res.status(400).json({ error: 'Invalid OTP' });
+  try {
+    console.log('🔍 [AUTH LOGOUT] Revoking token');
+    await db.revokeSession(token);
+    console.log('✅ [AUTH LOGOUT] Session revoked');
+    
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('🔥 [AUTH LOGOUT] Error:', error.message);
+    res.status(500).json({ error: 'Server error' });
   }
-
-// Create or get user from database
-  const user = await getOrCreateUser(email);
-//   const user = usersStore[email];
-  const token = generateToken(email);
-  await db.deleteOTP(email);
-  res.json({
-    success: true,
-    message: 'Login successful',
-    token,
-    user,
-  });
 });
 
 module.exports = router;

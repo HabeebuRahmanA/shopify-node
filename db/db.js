@@ -74,16 +74,16 @@ const db = {
   },
 
   // Store session
-  async storeSession(userId, token) {
+  async createSession(userId, token, expiresAt) {
     try {
       const result = await sql`
-        INSERT INTO sessions (user_id, token, created_at)
-        VALUES (${userId}, ${token}, NOW())
-        RETURNING id, user_id, token, created_at
+        INSERT INTO sessions (user_id, token, created_at, expires_at)
+        VALUES (${userId}, ${token}, NOW(), ${expiresAt})
+        RETURNING id, user_id, token, created_at, expires_at
       `;
       return result[0];
     } catch (error) {
-      console.error('Error storing session:', error);
+      console.error('Error creating session:', error);
       throw error;
     }
   },
@@ -92,13 +92,54 @@ const db = {
   async getSession(token) {
     try {
       const result = await sql`
-        SELECT s.*, u.email FROM sessions s
-        JOIN users u ON s.user_id = u.id
-        WHERE s.token = ${token}
+        SELECT * FROM sessions 
+        WHERE token = ${token} AND revoked = false
       `;
       return result[0] || null;
     } catch (error) {
       console.error('Error getting session:', error);
+      throw error;
+    }
+  },
+
+  // Get user by ID
+  async getUserById(userId) {
+    try {
+      const result = await sql`
+        SELECT * FROM users WHERE id = ${userId}
+      `;
+      return result[0] || null;
+    } catch (error) {
+      console.error('Error getting user by ID:', error);
+      throw error;
+    }
+  },
+
+  // Revoke session
+  async revokeSession(token) {
+    try {
+      await sql`
+        UPDATE sessions 
+        SET revoked = true 
+        WHERE token = ${token}
+      `;
+      return true;
+    } catch (error) {
+      console.error('Error revoking session:', error);
+      throw error;
+    }
+  },
+
+  // Clean up expired sessions
+  async cleanupExpiredSessions() {
+    try {
+      await sql`
+        DELETE FROM sessions 
+        WHERE expires_at < NOW() OR revoked = true
+      `;
+      return true;
+    } catch (error) {
+      console.error('Error cleaning up sessions:', error);
       throw error;
     }
   },
