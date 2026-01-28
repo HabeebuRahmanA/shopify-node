@@ -128,6 +128,7 @@ async function getOrCreateUser(email, forceRefresh = false) {
         console.log('✅ [AUTH] Shopify customer created for new user');
       } catch (createError) {
         console.log('⚠️ [AUTH] Failed to create Shopify customer:', createError.message);
+        console.log('⚠️ [AUTH] Full error details:', createError);
         // Continue with local user data if Shopify creation fails
       }
     }
@@ -172,15 +173,11 @@ async function getOrCreateUser(email, forceRefresh = false) {
 async function createShopifyCustomer(email, firstName, lastName) {
   try {
     console.log('🛒 [AUTH] Creating Shopify customer for:', email);
+    console.log('👤 [AUTH] Customer name:', `${firstName || ''} ${lastName || ''}`.trim());
     
     const mutation = `
-      mutation {
-        customerCreate(input: {
-          email: "${email}"
-          firstName: "${firstName || ''}"
-          lastName: "${lastName || ''}"
-          acceptsMarketing: false
-        }) {
+      mutation customerCreate($input: CustomerInput!) {
+        customerCreate(input: $input) {
           customer {
             id
             email
@@ -214,7 +211,19 @@ async function createShopifyCustomer(email, firstName, lastName) {
       }
     `;
 
-    const data = await queryShopifyAdmin(mutation);
+    const variables = {
+      input: {
+        email: email,
+        firstName: firstName || '',
+        lastName: lastName || '',
+        acceptsMarketing: false
+      }
+    };
+
+    console.log('📡 [AUTH] Sending Shopify customer creation request...');
+    console.log('🔗 [AUTH] Variables:', JSON.stringify(variables, null, 2));
+
+    const data = await queryShopifyAdmin(mutation, variables);
     console.log('📊 [AUTH] Shopify customer creation response:', JSON.stringify(data, null, 2));
     
     if (data.customerCreate && data.customerCreate.customer) {
@@ -236,10 +245,16 @@ async function createShopifyCustomer(email, firstName, lastName) {
         dataSource: 'admin',
         isNewCustomer: true
       };
-    } else if (data.customerCreate && data.customerCreate.userErrors.length > 0) {
-      throw new Error(`Shopify customer creation failed: ${data.customerCreate.userErrors.map(e => e.message).join(', ')}`);
+    } else if (data.customerCreate && data.customerCreate.userErrors && data.customerCreate.userErrors.length > 0) {
+      const errors = data.customerCreate.userErrors;
+      console.log('❌ [AUTH] Shopify customer creation errors:');
+      errors.forEach(error => {
+        console.log(`   - Field: ${error.field}, Message: ${error.message}`);
+      });
+      throw new Error(`Shopify customer creation failed: ${errors.map(e => e.message).join(', ')}`);
     } else {
-      throw new Error('Unknown error creating Shopify customer');
+      console.log('❌ [AUTH] Unexpected Shopify response:', JSON.stringify(data, null, 2));
+      throw new Error('Unknown error creating Shopify customer - unexpected response format');
     }
   } catch (error) {
     console.error('🔥 [AUTH] Error creating Shopify customer:', error.message);
