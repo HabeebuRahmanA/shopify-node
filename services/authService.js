@@ -219,8 +219,7 @@ async function createShopifyCustomer(email, firstName, lastName) {
       input: {
         email: email,
         firstName: firstName || '',
-        lastName: lastName || '',
-        acceptsMarketing: false
+        lastName: lastName || ''
       }
     };
 
