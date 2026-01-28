@@ -299,7 +299,12 @@ async function getCustomerDataStorefront(email) {
 router.post('/orders/get-orders', async (req, res) => {
   const { email } = req.body;
 
+  console.log('🔍 [ORDERS] Request received');
+  console.log('📧 [ORDERS] Email:', email);
+  console.log('🔍 [ORDERS] Request body:', JSON.stringify(req.body));
+
   if (!email || !email.includes('@')) {
+    console.log('❌ [ORDERS] Invalid email format');
     return res.status(400).json({ error: 'Valid email required' });
   }
 
@@ -307,11 +312,17 @@ router.post('/orders/get-orders', async (req, res) => {
     console.log('🔍 [ORDERS] Fetching orders for email:', email);
     
     // Check if environment variables are set
+    console.log('🔍 [ORDERS] Checking environment variables...');
+    console.log('🌐 [ORDERS] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
+    console.log('🔑 [ORDERS] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ADMIN_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+    console.log('🛍️ [ORDERS] SHOPIFY_STOREFRONT_ACCESS_TOKEN:', SHOPIFY_STOREFRONT_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+    
     if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
-      console.error('🔥 [ORDERS] Missing Shopify environment variables');
-      return res.status(500).json({ error: 'Shopify configuration missing' });
+      console.error('🔥 [ORDERS] Missing Shopify Admin environment variables');
+      return res.status(500).json({ error: 'Shopify Admin configuration missing' });
     }
     
+    console.log('📡 [ORDERS] Building GraphQL query...');
     const query = `
       query {
         customers(first: 1, query: "email:${email}") {
@@ -366,43 +377,66 @@ router.post('/orders/get-orders', async (req, res) => {
       }
     `;
 
-    console.log('📡 [ORDERS] Sending GraphQL query to Shopify...');
-    const data = await queryShopifyAdmin(query);
-    console.log('📊 [ORDERS] Shopify response:', JSON.stringify(data, null, 2));
+    console.log('📡 [ORDERS] Sending GraphQL query to Shopify Admin API...');
+    console.log('🔗 [ORDERS] Admin API URL:', SHOPIFY_ADMIN_API_URL);
     
-    if (data.customers.edges.length > 0) {
+    const data = await queryShopifyAdmin(query);
+    console.log('📊 [ORDERS] Shopify Admin response received');
+    console.log('📊 [ORDERS] Full response:', JSON.stringify(data, null, 2));
+    
+    if (data.customers && data.customers.edges.length > 0) {
       const customer = data.customers.edges[0].node;
-      const orders = customer.orders.edges.map(edge => edge.node);
+      console.log('✅ [ORDERS] Customer found:', customer.email);
+      console.log('📦 [ORDERS] Orders count:', customer.orders ? customer.orders.edges.length : 0);
       
-      console.log('✅ [ORDERS] Found ${orders.length} orders for customer');
+      const orders = customer.orders ? customer.orders.edges.map(edge => edge.node) : [];
+      
+      console.log('✅ [ORDERS] Successfully processed orders');
+      console.log('📊 [ORDERS] Orders summary:', orders.map(o => ({ name: o.name, status: o.displayFinancialStatus, total: o.totalPriceSet?.shopMoney?.amount })));
       
       res.json({
         success: true,
         orders: orders,
         count: orders.length,
+        message: `Found ${orders.length} orders`
       });
     } else {
       console.log('⚠️ [ORDERS] No customer found for email:', email);
+      console.log('📊 [ORDERS] Customers array:', data.customers);
       res.json({
         success: true,
         orders: [],
         count: 0,
+        message: 'No orders found - customer not found'
       });
     }
   } catch (error) {
     console.error('🔥 [ORDERS] Error fetching orders:', error.message);
-    console.error('🔥 [ORDERS] Full error:', error);
+    console.error('🔥 [ORDERS] Full error details:', error);
+    console.error('🔥 [ORDERS] Error stack:', error.stack);
     
     // Check if it's a GraphQL error
     if (error.message && error.message.includes('GraphQL')) {
       console.error('🔥 [ORDERS] GraphQL error detected');
-      return res.status(500).json({ 
-        error: 'Shopify API error',
-        details: error.message 
-      });
+      try {
+        const graphqlErrors = JSON.parse(error.message);
+        console.error('🔥 [ORDERS] GraphQL errors:', JSON.stringify(graphqlErrors, null, 2));
+        return res.status(500).json({ 
+          error: 'Shopify GraphQL API error',
+          details: graphqlErrors,
+          message: 'Invalid GraphQL query fields'
+        });
+      } catch (parseError) {
+        console.error('🔥 [ORDERS] Could not parse GraphQL error');
+      }
     }
     
-    res.status(500).json({ error: 'Failed to fetch orders' });
+    console.error('🔥 [ORDERS] Sending 500 response to client');
+    res.status(500).json({ 
+      error: 'Failed to fetch orders',
+      details: error.message,
+      message: 'Internal server error'
+    });
   }
 });
 
