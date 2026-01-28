@@ -342,7 +342,7 @@ router.post('/auth/add-address', async (req, res) => {
       const mutation = `
         mutation customerAddressCreate($customerId: ID!, $address: MailingAddressInput!) {
           customerAddressCreate(customerId: $customerId, address: $address) {
-            customerAddress {
+            address {
               id
               address1
               address2
@@ -377,8 +377,8 @@ router.post('/auth/add-address', async (req, res) => {
       const shopifyResponse = await queryShopifyAdmin(mutation, variables);
       console.log('📊 [ADD ADDRESS] Shopify response:', JSON.stringify(shopifyResponse, null, 2));
 
-      if (shopifyResponse.customerAddressCreate && shopifyResponse.customerAddressCreate.customerAddress) {
-        const shopifyAddress = shopifyResponse.customerAddressCreate.customerAddress;
+      if (shopifyResponse.customerAddressCreate && shopifyResponse.customerAddressCreate.address) {
+        const shopifyAddress = shopifyResponse.customerAddressCreate.address;
         console.log('✅ [ADD ADDRESS] Address created in Shopify:', shopifyAddress.id);
         
         // Store reference in Neon (simple approach - just store the Shopify address ID)
