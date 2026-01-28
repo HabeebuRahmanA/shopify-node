@@ -165,6 +165,12 @@ router.post('/auth/validate', async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
+    console.log('📊 [AUTH VALIDATE] Local user data from database:');
+    console.log('📊 [AUTH VALIDATE] User ID:', user.id);
+    console.log('📊 [AUTH VALIDATE] User ID type:', typeof user.id);
+    console.log('📊 [AUTH VALIDATE] User email:', user.email);
+    console.log('📊 [AUTH VALIDATE] All local user keys:', Object.keys(user));
+
     // Fetch fresh data using Storefront API for auto-login
     try {
       console.log('📡 [AUTH VALIDATE] Fetching fresh Shopify data for auto-login...');
@@ -175,9 +181,17 @@ router.post('/auth/validate', async (req, res) => {
         
         // Merge local user data with fresh Shopify data, preserving local ID
         const mergedUserData = {
-          ...user, // Keep local database fields (id, email, created_at, etc.)
-          ...freshUserData, // Add Shopify fields (phone, shopify_created_at, etc.)
+          ...freshUserData, // Start with Shopify data
+          id: user.id,       // Explicitly preserve local database ID
+          email: user.email, // Preserve local email
+          created_at: user.created_at, // Preserve local created_at
+          updated_at: new Date().toISOString(), // Update timestamp
         };
+        
+        console.log('📊 [AUTH VALIDATE] Merged user data:');
+        console.log('📊 [AUTH VALIDATE] Final User ID:', mergedUserData.id);
+        console.log('📊 [AUTH VALIDATE] Final User ID type:', typeof mergedUserData.id);
+        console.log('📊 [AUTH VALIDATE] Final User email:', mergedUserData.email);
         
         return res.json({
           success: true,
