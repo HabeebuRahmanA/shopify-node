@@ -335,7 +335,6 @@ router.post('/orders/get-orders', async (req, res) => {
                   node {
                     id
                     name
-                    number
                     processedAt
                     createdAt
                     totalPriceSet {
