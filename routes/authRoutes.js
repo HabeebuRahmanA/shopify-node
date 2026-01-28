@@ -3,7 +3,7 @@ const router = express.Router();
 
 const db = require('../db/db');
 const { sendOTPEmail } = require('../services/emailService');
-const { generateOTP, generateToken, getOrCreateUser } = require('../services/authService');
+const { generateOTP, generateToken, getOrCreateUser, createShopifyCustomer } = require('../services/authService');
 const { checkShopifyCustomerExists } = require('./shopifyRoutes');
 
 router.get('/', (req, res) => {
@@ -132,6 +132,89 @@ router.post('/auth/verify-otp', async (req, res) => {
   } catch (error) {
     console.error('🔥 [OTP VERIFY] Error:', error.message);
     console.error('🔥 [OTP VERIFY] Full error:', error);
+    res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
+// Register new user with full details
+router.post('/auth/register', async (req, res) => {
+  const { email, firstName, lastName, phone } = req.body;
+
+  if (!email || !firstName || !lastName) {
+    return res.status(400).json({ error: 'Email, first name, and last name are required' });
+  }
+
+  try {
+    console.log('🔍 [REGISTER] Registering new user:', email);
+    console.log('👤 [REGISTER] Name:', `${firstName} ${lastName}`);
+    console.log('📱 [REGISTER] Phone:', phone || 'Not provided');
+    
+    // Check if user already exists
+    const existingUser = await db.getUser(email);
+    if (existingUser) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+
+    // Create user in local database
+    const localUser = await db.createUser(email, `${firstName} ${lastName}`);
+    console.log('👤 [REGISTER] Created local user:', localUser.id);
+
+    // Create Shopify customer
+    let shopifyCustomer;
+    try {
+      shopifyCustomer = await createShopifyCustomer(email, firstName, lastName);
+      console.log('✅ [REGISTER] Shopify customer created:', shopifyCustomer.id);
+    } catch (shopifyError) {
+      console.log('⚠️ [REGISTER] Shopify customer creation failed:', shopifyError.message);
+      // Continue with local user if Shopify creation fails
+    }
+
+    // Prepare user data
+    let userData = {
+      id: localUser.id,
+      email: localUser.email,
+      name: localUser.name,
+      created_at: localUser.created_at,
+      updated_at: localUser.updated_at,
+    };
+
+    // Add Shopify data if available
+    if (shopifyCustomer) {
+      userData = {
+        ...userData,
+        ...shopifyCustomer,
+        phone: phone || shopifyCustomer.phone,
+      };
+
+      // Update database with Shopify data
+      try {
+        await db.updateUserShopifyData(email, shopifyCustomer);
+        console.log('💾 [REGISTER] Updated database with Shopify data');
+      } catch (dbError) {
+        console.log('⚠️ [REGISTER] Database update failed:', dbError.message);
+      }
+    }
+
+    // Generate token
+    const token = generateToken(email);
+    
+    // Store session
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    await db.createSession(userData.id, token, expiresAt);
+    
+    console.log('✅ [REGISTER] Registration successful for:', email);
+    console.log('💾 [REGISTER] Session created for user:', userData.id);
+    
+    res.json({
+      success: true,
+      message: 'Registration successful',
+      token,
+      user: userData,
+      expiresIn: '30 days'
+    });
+  } catch (error) {
+    console.error('🔥 [REGISTER] Error:', error.message);
+    console.error('🔥 [REGISTER] Full error:', error);
     res.status(500).json({ error: 'Server error. Please try again.' });
   }
 });

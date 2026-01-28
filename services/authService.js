@@ -118,7 +118,20 @@ async function getOrCreateUser(email, forceRefresh = false) {
   
   // Try to enrich with Shopify customer data
   try {
-    const shopifyCustomer = await getShopifyCustomerDetails(email, forceRefresh);
+    let shopifyCustomer = await getShopifyCustomerDetails(email, forceRefresh);
+    
+    // If no Shopify customer exists and this is a new user, create one
+    if (!shopifyCustomer && isNewUser) {
+      console.log('🆕 [AUTH] No Shopify customer found for new user, creating one...');
+      try {
+        shopifyCustomer = await createShopifyCustomer(email, user.name, '');
+        console.log('✅ [AUTH] Shopify customer created for new user');
+      } catch (createError) {
+        console.log('⚠️ [AUTH] Failed to create Shopify customer:', createError.message);
+        // Continue with local user data if Shopify creation fails
+      }
+    }
+    
     if (shopifyCustomer) {
       // IMPORTANT: Preserve local database fields, add Shopify data
       const enrichedUser = {
@@ -155,9 +168,90 @@ async function getOrCreateUser(email, forceRefresh = false) {
   }
 }
 
+// Create Shopify customer
+async function createShopifyCustomer(email, firstName, lastName) {
+  try {
+    console.log('🛒 [AUTH] Creating Shopify customer for:', email);
+    
+    const mutation = `
+      mutation {
+        customerCreate(input: {
+          email: "${email}"
+          firstName: "${firstName || ''}"
+          lastName: "${lastName || ''}"
+          acceptsMarketing: false
+        }) {
+          customer {
+            id
+            email
+            firstName
+            lastName
+            phone
+            createdAt
+            state
+            defaultAddress {
+              address1
+              address2
+              city
+              province
+              zip
+              country
+            }
+            addresses(first: 5) {
+              address1
+              address2
+              city
+              province
+              zip
+              country
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const data = await queryShopifyAdmin(mutation);
+    console.log('📊 [AUTH] Shopify customer creation response:', JSON.stringify(data, null, 2));
+    
+    if (data.customerCreate && data.customerCreate.customer) {
+      const customer = data.customerCreate.customer;
+      console.log('✅ [AUTH] Shopify customer created successfully:', customer.email);
+      console.log('🆔 [AUTH] Shopify Customer ID:', customer.id);
+      return {
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        phone: customer.phone,
+        createdAt: customer.createdAt,
+        numberOfOrders: 0,
+        ordersCount: 0,
+        state: customer.state,
+        defaultAddress: customer.defaultAddress,
+        addresses: customer.addresses || [],
+        dataSource: 'admin',
+        isNewCustomer: true
+      };
+    } else if (data.customerCreate && data.customerCreate.userErrors.length > 0) {
+      throw new Error(`Shopify customer creation failed: ${data.customerCreate.userErrors.map(e => e.message).join(', ')}`);
+    } else {
+      throw new Error('Unknown error creating Shopify customer');
+    }
+  } catch (error) {
+    console.error('🔥 [AUTH] Error creating Shopify customer:', error.message);
+    console.error('🔥 [AUTH] Full error:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   generateOTP,
   generateToken,
   getOrCreateUser,
   getShopifyCustomerDetails,
+  createShopifyCustomer,
 };
