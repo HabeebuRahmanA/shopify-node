@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
-
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const { neon } = require('@neondatabase/serverless');
 const db = require('../db/db');
 const { sendOTPEmail } = require('../services/emailService');
 const { generateOTP, generateToken, getOrCreateUser, createShopifyCustomer } = require('../services/authService');
@@ -301,15 +303,15 @@ router.post('/auth/add-address', async (req, res) => {
     console.log('🔍 [ADD ADDRESS] Adding address for user:', email);
     console.log('📍 [ADD ADDRESS] Address data:', JSON.stringify(address, null, 2));
 
-    // Get user from database
-    const user = await db.getUser(email);
+    // Get user from database and enrich with Shopify data
+    const user = await getOrCreateUser(email);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Check if user has Shopify customer ID
     if (!user.shopify_id) {
-      return res.status(400).json({ error: 'User does not have Shopify customer ID. Please register or login again.' });
+      return res.status(400).json({ error: 'User does not have Shopify customer ID. Please try again or contact support.' });
     }
 
     // Create address in Shopify first
