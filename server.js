@@ -5,13 +5,15 @@ if (process.env.NODE_ENV !== 'production') {
 
 const express = require('express');
 const authRoutes = require('./routes/authRoutes');
-const { router: shopifyRoutes } = require('./routes/shopifyRoutes');
+const shopifyRoutes = require('./routes/shopifyRoutes');
+const cartRoutes = require('./routes/cartRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Add global error handler
 app.use((err, req, res, next) => {
+  console.error(' [GLOBAL ERROR]', err);
   console.error('🔥 [GLOBAL ERROR]', err);
   res.status(500).json({ 
     error: 'Server error occurred',
@@ -36,9 +38,10 @@ app.get('/test', (req, res) => {
 });
 
 // Mount auth and email routes
-app.use(authRoutes);
-app.use(shopifyRoutes);
+app.use('/', authRoutes);
+app.use('/', shopifyRoutes);
+app.use('/', cartRoutes);
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server on port ${PORT}`);
+  console.log(` Server on port ${PORT}`);
 });
