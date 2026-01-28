@@ -138,38 +138,23 @@ async function getCustomerDataStorefront(email) {
   try {
     console.log('🔍 [STOREFRONT] Fetching customer data for email:', email);
     
-    // Note: Storefront API customer query requires customer access token, not just email
-    // For now, let's return a basic structure and we'll implement OAuth later
-    console.log('⚠️ [STOREFRONT] Storefront API needs customer access token - using fallback');
+    // For Storefront API, we need to find customer by email first
+    // This is a limitation - Storefront API works best with customer access tokens
+    // Let's use a customer query that can search by email
     
-    // Fallback: Return basic data without Storefront API call
-    // In a full implementation, you'd need OAuth flow to get customer access token
-    return {
-      email: email,
-      name: email.split('@')[0],
-      phone: null,
-      createdAt: null,
-      numberOfOrders: 0,
-      defaultAddress: null,
-      addresses: [],
-      orders: [],
-      dataSource: 'storefront_fallback'
-    };
-    
-    /* Full Storefront API implementation (requires customer access token):
     const query = `
       query {
-        customer(customerAccessToken: "${customerAccessToken}") {
-          id
-          email
-          firstName
-          lastName
-          phone
-          createdAt
-          numberOfOrders
-          addresses(first: 5) {
-            edges {
-              node {
+        customers(first: 1, query: "email:${email}") {
+          edges {
+            node {
+              id
+              email
+              firstName
+              lastName
+              phone
+              createdAt
+              numberOfOrders
+              defaultAddress {
                 address1
                 address2
                 city
@@ -177,29 +162,35 @@ async function getCustomerDataStorefront(email) {
                 zip
                 country
               }
-            }
-          }
-          defaultAddress {
-            address1
-            address2
-            city
-            province
-            zip
-            country
-          }
-          orders(first: 10, reverse: true) {
-            edges {
-              node {
-                id
-                name
-                orderNumber
-                processedAt
-                totalPriceV2 {
-                  amount
-                  currencyCode
+              addresses(first: 5) {
+                edges {
+                  node {
+                    address1
+                    address2
+                    city
+                    province
+                    zip
+                    country
+                  }
                 }
-                financialStatus
-                fulfillmentStatus
+              }
+              orders(first: 10, reverse: true) {
+                edges {
+                  node {
+                    id
+                    name
+                    number
+                    processedAt
+                    totalPriceSet {
+                      shopMoney {
+                        amount
+                        currencyCode
+                      }
+                    }
+                    displayFinancialStatus
+                    displayFulfillmentStatus
+                  }
+                }
               }
             }
           }
@@ -209,29 +200,99 @@ async function getCustomerDataStorefront(email) {
 
     const data = await queryShopifyStorefront(query);
     
-    if (data.customer) {
+    if (data.customers && data.customers.edges.length > 0) {
+      const customer = data.customers.edges[0].node;
       console.log('✅ [STOREFRONT] Customer data fetched successfully');
       return {
-        id: data.customer.id,
-        email: data.customer.email,
-        name: `${data.customer.firstName || ''} ${data.customer.lastName || ''}`.trim() || email.split('@')[0],
-        firstName: data.customer.firstName,
-        lastName: data.customer.lastName,
-        phone: data.customer.phone,
-        createdAt: data.customer.createdAt,
-        numberOfOrders: data.customer.numberOfOrders,
-        defaultAddress: data.customer.defaultAddress,
-        addresses: data.customer.addresses?.edges?.map(edge => edge.node) || [],
-        orders: data.customer.orders?.edges?.map(edge => edge.node) || [],
+        id: customer.id,
+        email: customer.email,
+        name: `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || email.split('@')[0],
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        phone: customer.phone,
+        createdAt: customer.createdAt,
+        numberOfOrders: customer.numberOfOrders,
+        defaultAddress: customer.defaultAddress,
+        addresses: customer.addresses?.edges?.map(edge => edge.node) || [],
+        orders: customer.orders?.edges?.map(edge => edge.node) || [],
         dataSource: 'storefront'
       };
+    } else {
+      console.log('⚠️ [STOREFRONT] No customer found for email:', email);
+      return null;
+    }
+  } catch (error) {
+    console.error('🔥 [STOREFRONT] Error fetching customer data:', error.message);
+    console.error('🔥 [STOREFRONT] Full error:', error);
+    
+    // If Storefront API fails, fall back to Admin API for auto-login
+    console.log('🔄 [STOREFRONT] Falling back to Admin API for auto-login');
+    try {
+      const shopifyRoutes = require('./shopifyRoutes');
+      const { queryShopifyAdmin } = shopifyRoutes;
+      
+      const adminQuery = `
+        query {
+          customers(first: 1, query: "email:${email}") {
+            edges {
+              node {
+                id
+                email
+                firstName
+                lastName
+                phone
+                createdAt
+                numberOfOrders
+                ordersCount
+                state
+                defaultAddress {
+                  address1
+                  address2
+                  city
+                  province
+                  zip
+                  country
+                }
+                addresses(first: 5) {
+                  address1
+                  address2
+                  city
+                  province
+                  zip
+                  country
+                }
+              }
+            }
+          }
+        }
+      `;
+
+      const adminData = await queryShopifyAdmin(adminQuery);
+      
+      if (adminData.customers.edges.length > 0) {
+        const customer = adminData.customers.edges[0].node;
+        console.log('✅ [ADMIN] Fallback data fetched successfully');
+        return {
+          id: customer.id,
+          email: customer.email,
+          name: `${customer.firstName || ''} ${customer.lastName || ''}`.trim() || email.split('@')[0],
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          phone: customer.phone,
+          createdAt: customer.createdAt,
+          numberOfOrders: customer.numberOfOrders || customer.ordersCount,
+          totalSpent: 0,
+          state: customer.state,
+          defaultAddress: customer.defaultAddress,
+          addresses: customer.addresses || [],
+          dataSource: 'admin_fallback'
+        };
+      }
+    } catch (fallbackError) {
+      console.error('🔥 [ADMIN] Fallback also failed:', fallbackError.message);
     }
     
     return null;
-    */
-  } catch (error) {
-    console.error('🔥 [STOREFRONT] Error fetching customer data:', error.message);
-    throw error;
   }
 }
 

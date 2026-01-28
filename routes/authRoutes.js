@@ -165,6 +165,24 @@ router.post('/auth/validate', async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
+    // Fetch fresh data using Storefront API for auto-login
+    try {
+      console.log('📡 [AUTH VALIDATE] Fetching fresh Shopify data for auto-login...');
+      const freshUserData = await getOrCreateUser(user.email, false); // false = use Storefront API
+      if (freshUserData && freshUserData.dataSource !== 'storefront_fallback') {
+        console.log('✅ [AUTH VALIDATE] Fresh data fetched for user:', user.email);
+        console.log('📊 [AUTH VALIDATE] Data source:', freshUserData.dataSource);
+        return res.json({
+          success: true,
+          user: freshUserData
+        });
+      } else {
+        console.log('⚠️ [AUTH VALIDATE] Fresh data fetch failed, using cached data');
+      }
+    } catch (error) {
+      console.log('⚠️ [AUTH VALIDATE] Could not fetch fresh data, using cached data:', error.message);
+    }
+
     console.log('✅ [AUTH VALIDATE] Session valid for user:', user.email);
     console.log('📊 [AUTH VALIDATE] Using cached user data from database');
     
