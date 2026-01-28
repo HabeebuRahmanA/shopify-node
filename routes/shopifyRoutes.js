@@ -243,7 +243,6 @@ async function getCustomerDataStorefront(email) {
                 phone
                 createdAt
                 numberOfOrders
-                ordersCount
                 state
                 defaultAddress {
                   address1
@@ -280,7 +279,7 @@ async function getCustomerDataStorefront(email) {
           lastName: customer.lastName,
           phone: customer.phone,
           createdAt: customer.createdAt,
-          numberOfOrders: customer.numberOfOrders || customer.ordersCount,
+          numberOfOrders: customer.numberOfOrders,
           totalSpent: 0,
           state: customer.state,
           defaultAddress: customer.defaultAddress,
