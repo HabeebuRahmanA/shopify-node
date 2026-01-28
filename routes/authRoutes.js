@@ -310,8 +310,25 @@ router.post('/auth/add-address', async (req, res) => {
     }
 
     // Check if user has Shopify customer ID
+    console.log('🔍 [ADD ADDRESS] User data keys:', Object.keys(user));
+    console.log('🔍 [ADD ADDRESS] Shopify ID check:', {
+      shopify_id: user.shopify_id,
+      id: user.id,
+      customerId: user.customerId,
+      customer_id: user.customer_id,
+      hasShopifyId: !!user.shopify_id
+    });
+    
     if (!user.shopify_id) {
-      return res.status(400).json({ error: 'User does not have Shopify customer ID. Please try again or contact support.' });
+      return res.status(400).json({ 
+        error: 'User does not have Shopify customer ID. Please try again or contact support.',
+        debug: {
+          userKeys: Object.keys(user),
+          shopify_id: user.shopify_id,
+          customerId: user.customerId,
+          customer_id: user.customer_id
+        }
+      });
     }
 
     // Create address in Shopify first
