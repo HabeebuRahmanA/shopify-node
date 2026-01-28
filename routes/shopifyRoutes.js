@@ -580,6 +580,251 @@ router.post('/addresses/get-addresses', async (req, res) => {
   }
 });
 
+// Get all store products using Storefront API
+router.post('/shop/get-products', async (req, res) => {
+  try {
+    console.log('🔍 [SHOP] Fetching all products from store');
+    
+    // Check if environment variables are set
+    console.log('🔍 [SHOP] Checking environment variables...');
+    console.log('🌐 [SHOP] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
+    console.log('🛍️ [SHOP] SHOPIFY_STOREFRONT_ACCESS_TOKEN:', SHOPIFY_STOREFRONT_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+    
+    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_STOREFRONT_ACCESS_TOKEN) {
+      console.error('🔥 [SHOP] Missing Shopify Storefront environment variables');
+      // Fall back to Admin API if Storefront token is not available
+      if (SHOPIFY_ADMIN_ACCESS_TOKEN) {
+        console.log('🔄 [SHOP] Falling back to Admin API for products');
+        return _getProductsAdminAPI(req, res);
+      }
+      return res.status(500).json({ error: 'Shopify configuration missing' });
+    }
+    
+    console.log('📡 [SHOP] Building Storefront API query...');
+    const query = `
+      query {
+        products(first: 50, sortKey: CREATED_AT, reverse: true) {
+          edges {
+            node {
+              id
+              title
+              description
+              productType
+              vendor
+              tags
+              createdAt
+              updatedAt
+              featuredImage {
+                url
+                altText
+              }
+              priceRangeV2 {
+                minVariantPrice {
+                  amount
+                  currencyCode
+                }
+                maxVariantPrice {
+                  amount
+                  currencyCode
+                }
+              }
+              variants(first: 5) {
+                edges {
+                  node {
+                    id
+                    title
+                    sku
+                    priceV2 {
+                      amount
+                      currencyCode
+                    }
+                    availableForSale
+                    selectedOptions {
+                      name
+                      value
+                    }
+                  }
+                }
+              }
+              collections(first: 5) {
+                edges {
+                  node {
+                    id
+                    title
+                    handle
+                  }
+                }
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `;
+
+    console.log('📡 [SHOP] Sending GraphQL query to Shopify Storefront API...');
+    console.log('🔗 [SHOP] Storefront API URL:', SHOPIFY_STOREFRONT_API_URL);
+    
+    const data = await queryShopifyStorefront(query);
+    console.log('📊 [SHOP] Shopify Storefront response received');
+    console.log('📊 [SHOP] Products count:', data.products ? data.products.edges.length : 0);
+    
+    if (data.products && data.products.edges.length > 0) {
+      const products = data.products.edges.map(edge => edge.node);
+      
+      console.log('✅ [SHOP] Successfully fetched products');
+      console.log('📊 [SHOP] Products summary:', products.map(p => ({ 
+        title: p.title, 
+        type: p.productType, 
+        price: p.priceRangeV2?.minVariantPrice?.amount 
+      })));
+      
+      res.json({
+        success: true,
+        products: products,
+        count: products.length,
+        pageInfo: data.products.pageInfo,
+        message: `Found ${products.length} products`
+      });
+    } else {
+      console.log('⚠️ [SHOP] No products found in store');
+      res.json({
+        success: true,
+        products: [],
+        count: 0,
+        message: 'No products found in store'
+      });
+    }
+  } catch (error) {
+    console.error('🔥 [SHOP] Error fetching products:', error.message);
+    console.error('🔥 [SHOP] Full error details:', error);
+    console.error('🔥 [SHOP] Error stack:', error.stack);
+    
+    // Fall back to Admin API if Storefront API fails
+    if (SHOPIFY_ADMIN_ACCESS_TOKEN) {
+      console.log('🔄 [SHOP] Storefront API failed, falling back to Admin API');
+      return _getProductsAdminAPI(req, res);
+    }
+    
+    // Check if it's a GraphQL error
+    if (error.message && error.message.includes('GraphQL')) {
+      console.error('🔥 [SHOP] GraphQL error detected');
+      try {
+        const graphqlErrors = JSON.parse(error.message);
+        console.error('🔥 [SHOP] GraphQL errors:', JSON.stringify(graphqlErrors, null, 2));
+        return res.status(500).json({ 
+          error: 'Shopify GraphQL API error',
+          details: graphqlErrors,
+          message: 'Invalid GraphQL query fields'
+        });
+      } catch (parseError) {
+        console.error('🔥 [SHOP] Could not parse GraphQL error');
+      }
+    }
+    
+    console.error('🔥 [SHOP] Sending 500 response to client');
+    res.status(500).json({ 
+      error: 'Failed to fetch products',
+      details: error.message,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Helper function to get products using Admin API (fallback)
+async function _getProductsAdminAPI(req, res) {
+  try {
+    console.log('🔄 [SHOP] Using Admin API fallback for products');
+    
+    const query = `
+      query {
+        products(first: 50, sortKey: CREATED_AT, reverse: true) {
+          edges {
+            node {
+              id
+              title
+              description
+              productType
+              vendor
+              tags
+              createdAt
+              updatedAt
+              featuredImage {
+                url
+                altText
+              }
+              priceRangeV2 {
+                minVariantPrice {
+                  amount
+                  currencyCode
+                }
+                maxVariantPrice {
+                  amount
+                  currencyCode
+                }
+              }
+              variants(first: 5) {
+                edges {
+                  node {
+                    id
+                    title
+                    sku
+                    price
+                    inventoryQuantity
+                    selectedOptions {
+                      name
+                      value
+                    }
+                  }
+                }
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `;
+
+    const data = await queryShopifyAdmin(query);
+    console.log('📊 [SHOP] Admin API response received');
+    
+    if (data.products && data.products.edges.length > 0) {
+      const products = data.products.edges.map(edge => edge.node);
+      
+      console.log('✅ [SHOP] Admin API fallback successful');
+      
+      res.json({
+        success: true,
+        products: products,
+        count: products.length,
+        pageInfo: data.products.pageInfo,
+        message: `Found ${products.length} products (Admin API)`,
+        dataSource: 'admin'
+      });
+    } else {
+      res.json({
+        success: true,
+        products: [],
+        count: 0,
+        message: 'No products found in store'
+      });
+    }
+  } catch (error) {
+    console.error('🔥 [SHOP] Admin API fallback also failed:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch products',
+      details: error.message,
+      message: 'Both Storefront and Admin APIs failed'
+    });
+  }
+}
+
 // Export the functions for use in other routes
 module.exports = {
   router,
