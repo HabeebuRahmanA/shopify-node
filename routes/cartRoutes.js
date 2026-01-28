@@ -289,24 +289,25 @@ async function createShopifyOrder(cartItems, shippingAddress, totalAmount, curre
     
     const query = `
       mutation {
-        orderCreate(input: {
-          lineItems: [${lineItemsString}],
-          shippingAddress: {
-            address1: "${shippingAddress.address1 || ''}",
-            address2: "${shippingAddress.address2 || ''}",
-            city: "${shippingAddress.city || ''}",
-            province: "${shippingAddress.province || ''}",
-            zip: "${shippingAddress.zip || ''}",
-            country: "${shippingAddress.country || ''}"
-          },
-          financialStatus: PENDING,
-          note: "COD Order - Mobile App${escapedNotes ? ' - ' + escapedNotes : ''}",
-          tags: "mobile-app, cod"
-        }) {
+        orderCreate(
+          order: {
+            lineItems: [${lineItemsString}]
+            shippingAddress: {
+              address1: "${shippingAddress.address1 || ''}"
+              address2: "${shippingAddress.address2 || ''}"
+              city: "${shippingAddress.city || ''}"
+              province: "${shippingAddress.province || ''}"
+              zip: "${shippingAddress.zip || ''}"
+              country: "${shippingAddress.country || ''}"
+            }
+            financialStatus: PENDING
+            note: "COD Order - Mobile App${escapedNotes ? ' - ' + escapedNotes : ''}"
+            tags: "mobile-app, cod"
+          }
+        ) {
           order {
             id
             name
-            orderNumber
             totalPrice
             currencyCode
             displayFinancialStatus
