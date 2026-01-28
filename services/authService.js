@@ -169,6 +169,10 @@ async function getOrCreateUser(email, forceRefresh = false) {
   }
 }
 
+// Import here to avoid circular dependency
+const shopifyRoutes = require('../routes/shopifyRoutes');
+const { queryShopifyAdmin, getCustomerDataStorefront } = shopifyRoutes;
+
 // Create Shopify customer
 async function createShopifyCustomer(email, firstName, lastName) {
   try {
