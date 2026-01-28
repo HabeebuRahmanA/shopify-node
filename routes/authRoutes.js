@@ -383,13 +383,19 @@ router.post('/auth/add-address', async (req, res) => {
         
         // Store reference in Neon (simple approach - just store the Shopify address ID)
         const addressReference = {
-          user_id: user.id,
+          user_id: user.id,  // Use local database ID (integer)
           shopify_address_id: shopifyAddress.id,
           address1: address.address1,
           city: address.city,
           is_default: address.isDefault || false,
           created_at: new Date(),
         };
+
+        console.log('🔍 [ADD ADDRESS] Storing address reference:', {
+          localUserId: user.id,
+          shopifyAddressId: shopifyAddress.id,
+          userIdType: typeof user.id
+        });
 
         // For now, store in a simple way - we can use a JSON field in users table or create a simple reference table
         // Let's use a simple approach: store in users table as JSON array
