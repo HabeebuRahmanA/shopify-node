@@ -825,15 +825,6 @@ async function _getProductsAdminAPI(req, res) {
   }
 }
 
-// Export the functions for use in other routes
-module.exports = {
-  router,
-  checkShopifyCustomerExists,
-  getCustomerDataStorefront,
-  queryShopifyAdmin,
-  queryShopifyStorefront
-};
-
 // Step 1: Auth Callback - Handle Shopify OAuth redirect
 router.get('/auth/callback', async (req, res) => {
   try {
@@ -1051,3 +1042,12 @@ router.post('/customer/profile', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
+
+// Export the functions for use in other routes
+module.exports = {
+  router,
+  checkShopifyCustomerExists,
+  getCustomerDataStorefront,
+  queryShopifyAdmin,
+  queryShopifyStorefront
+};
