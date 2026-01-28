@@ -138,17 +138,37 @@ router.post('/auth/verify-otp', async (req, res) => {
 
 // Register new user with full details
 router.post('/auth/register', async (req, res) => {
-  const { email, firstName, lastName, phone } = req.body;
+  const { email, firstName, lastName, phone, otp } = req.body;
 
-  if (!email || !firstName || !lastName) {
-    return res.status(400).json({ error: 'Email, first name, and last name are required' });
+  if (!email || !firstName || !lastName || !otp) {
+    return res.status(400).json({ error: 'Email, first name, last name, and OTP are required' });
   }
 
   try {
     console.log('🔍 [REGISTER] Registering new user:', email);
     console.log('👤 [REGISTER] Name:', `${firstName} ${lastName}`);
     console.log('📱 [REGISTER] Phone:', phone || 'Not provided');
+    console.log('🔢 [REGISTER] OTP:', otp);
     
+    // Verify OTP first
+    const storedOtp = await db.getOTP(email);
+    if (!storedOtp) {
+      return res.status(400).json({ error: 'OTP not found. Please request a new OTP.' });
+    }
+
+    // Check if OTP is expired
+    if (new Date(storedOtp.expires_at) < new Date()) {
+      await db.deleteOTP(email);
+      return res.status(400).json({ error: 'OTP has expired. Please request a new OTP.' });
+    }
+
+    // Verify OTP
+    if (storedOtp.code !== otp) {
+      return res.status(400).json({ error: 'Invalid OTP. Please try again.' });
+    }
+
+    console.log('✅ [REGISTER] OTP verified successfully');
+
     // Check if user already exists
     const existingUser = await db.getUser(email);
     if (existingUser) {
@@ -210,6 +230,9 @@ router.post('/auth/register', async (req, res) => {
     // Store session
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
     await db.createSession(userData.id, token, expiresAt);
+    
+    // Clean up OTP
+    await db.deleteOTP(email);
     
     console.log('✅ [REGISTER] Registration successful for:', email);
     console.log('💾 [REGISTER] Session created for user:', userData.id);
