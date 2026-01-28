@@ -151,7 +151,6 @@ const db = {
         UPDATE users 
         SET 
           name = ${shopifyData.name || email.split('@')[0]},
-          phone = ${shopifyData.phone || null},
           shopify_id = ${shopifyData.id || null},
           shopify_created_at = ${shopifyData.createdAt || null},
           number_of_orders = ${shopifyData.numberOfOrders || 0},
@@ -160,6 +159,7 @@ const db = {
           updated_at = NOW()
         WHERE email = ${email}
       `;
+      console.log('✅ [DB] User Shopify data updated successfully');
       return true;
     } catch (error) {
       console.error('Error updating user Shopify data:', error);

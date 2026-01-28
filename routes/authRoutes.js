@@ -171,7 +171,7 @@ router.post('/auth/register', async (req, res) => {
 
     // Prepare user data
     let userData = {
-      id: localUser.id,
+      id: localUser.id,           // IMPORTANT: Use local database ID
       email: localUser.email,
       name: localUser.name,
       created_at: localUser.created_at,
@@ -182,8 +182,17 @@ router.post('/auth/register', async (req, res) => {
     if (shopifyCustomer) {
       userData = {
         ...userData,
-        ...shopifyCustomer,
-        phone: phone || shopifyCustomer.phone,
+        shopify_id: shopifyCustomer.id,
+        shopify_email: shopifyCustomer.email,
+        shopify_firstName: shopifyCustomer.firstName,
+        shopify_lastName: shopifyCustomer.lastName,
+        shopify_phone: shopifyCustomer.phone,
+        shopify_createdAt: shopifyCustomer.createdAt,
+        shopify_state: shopifyCustomer.state,
+        shopify_defaultAddress: shopifyCustomer.defaultAddress,
+        shopify_addresses: shopifyCustomer.addresses || [],
+        dataSource: shopifyCustomer.dataSource,
+        isNewCustomer: shopifyCustomer.isNewCustomer,
       };
 
       // Update database with Shopify data
