@@ -36,7 +36,17 @@ async function queryShopifyAdmin(query) {
 router.post('/cart/add-item', async (req, res) => {
   const { userId, productId, variantId, quantity, price, currency } = req.body;
 
+  console.log('🛒 [CART] Add item request received');
+  console.log('📊 [CART] Request body:', JSON.stringify(req.body, null, 2));
+
   if (!userId || !productId || !variantId || !quantity || !price || !currency) {
+    console.log('❌ [CART] Missing required fields');
+    console.log('❌ [CART] userId:', userId);
+    console.log('❌ [CART] productId:', productId);
+    console.log('❌ [CART] variantId:', variantId);
+    console.log('❌ [CART] quantity:', quantity);
+    console.log('❌ [CART] price:', price);
+    console.log('❌ [CART] currency:', currency);
     return res.status(400).json({ error: 'All fields are required' });
   }
 
@@ -44,12 +54,21 @@ router.post('/cart/add-item', async (req, res) => {
     console.log('🛒 [CART] Adding item to cart for user:', userId);
     
     // Get or create user's cart
+    console.log('📊 [CART] Getting or creating cart...');
     const cart = await db.createOrUpdateCart(userId);
+    console.log('✅ [CART] Cart created/retrieved:', cart.id);
     
     // Add item to cart
-    const cartItem = await db.addCartItem(cart.id, productId, variantId, quantity, price, currency);
+    console.log('📊 [CART] Adding item to cart...');
+    console.log('📊 [CART] Cart ID:', cart.id);
+    console.log('📊 [CART] Product ID:', productId);
+    console.log('📊 [CART] Variant ID:', variantId);
+    console.log('📊 [CART] Quantity:', quantity);
+    console.log('📊 [CART] Price:', price);
+    console.log('📊 [CART] Currency:', currency);
     
-    console.log('✅ [CART] Item added to cart successfully');
+    const cartItem = await db.addCartItem(cart.id, productId, variantId, quantity, price, currency);
+    console.log('✅ [CART] Item added to cart successfully:', cartItem.id);
     
     res.json({
       success: true,
@@ -58,7 +77,8 @@ router.post('/cart/add-item', async (req, res) => {
     });
   } catch (error) {
     console.error('🔥 [CART] Error adding item to cart:', error);
-    res.status(500).json({ error: 'Failed to add item to cart' });
+    console.error('🔥 [CART] Full error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to add item to cart', details: error.message });
   }
 });
 

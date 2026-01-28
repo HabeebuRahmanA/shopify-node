@@ -172,9 +172,16 @@ router.post('/auth/validate', async (req, res) => {
       if (freshUserData && freshUserData.dataSource !== 'storefront_fallback') {
         console.log('✅ [AUTH VALIDATE] Fresh data fetched for user:', user.email);
         console.log('📊 [AUTH VALIDATE] Data source:', freshUserData.dataSource);
+        
+        // Merge local user data with fresh Shopify data, preserving local ID
+        const mergedUserData = {
+          ...user, // Keep local database fields (id, email, created_at, etc.)
+          ...freshUserData, // Add Shopify fields (phone, shopify_created_at, etc.)
+        };
+        
         return res.json({
           success: true,
-          user: freshUserData
+          user: mergedUserData
         });
       } else {
         console.log('⚠️ [AUTH VALIDATE] Fresh data fetch failed, using cached data');
