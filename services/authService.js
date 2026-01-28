@@ -120,12 +120,16 @@ async function getOrCreateUser(email, forceRefresh = false) {
   try {
     let shopifyCustomer = await getShopifyCustomerDetails(email, forceRefresh);
     
-    // If no Shopify customer exists and this is a new user, create one
-    if (!shopifyCustomer && isNewUser) {
-      console.log('🆕 [AUTH] No Shopify customer found for new user, creating one...');
+    // If no Shopify customer exists, create one for both new and existing users
+    if (!shopifyCustomer) {
+      console.log('🆕 [AUTH] No Shopify customer found, creating one...');
       try {
-        shopifyCustomer = await createShopifyCustomer(email, user.name, '');
-        console.log('✅ [AUTH] Shopify customer created for new user');
+        // Extract name from user data or use email username
+        const firstName = user.name ? user.name.split(' ')[0] : email.split('@')[0];
+        const lastName = user.name ? user.name.split(' ').slice(1).join(' ') : '';
+        
+        shopifyCustomer = await createShopifyCustomer(email, firstName, lastName);
+        console.log('✅ [AUTH] Shopify customer created for user');
       } catch (createError) {
         console.log('⚠️ [AUTH] Failed to create Shopify customer:', createError.message);
         console.log('⚠️ [AUTH] Full error details:', createError);
