@@ -1,9 +1,14 @@
-// Load environment variables - only in development
+// Load environment variables
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config({ path: '.env.development.local' });
+} else {
+  // In production, still try to load .env if it exists
+  require('dotenv').config();
 }
 
 const express = require('express');
+
+// Import routes after environment variables are loaded
 const authRoutes = require('./routes/authRoutes');
 const shopifyRoutes = require('./routes/shopifyRoutes');
 const cartRoutes = require('./routes/cartRoutes');
