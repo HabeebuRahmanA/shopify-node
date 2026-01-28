@@ -316,15 +316,19 @@ router.post('/auth/add-address', async (req, res) => {
       id: user.id,
       customerId: user.customerId,
       customer_id: user.customer_id,
-      hasShopifyId: !!user.shopify_id
+      hasShopifyId: !!(user.shopify_id || user.id)
     });
     
-    if (!user.shopify_id) {
+    // Use either shopify_id or id (Shopify Admin API returns ID in 'id' field)
+    const shopifyCustomerId = user.shopify_id || user.id;
+    
+    if (!shopifyCustomerId) {
       return res.status(400).json({ 
         error: 'User does not have Shopify customer ID. Please try again or contact support.',
         debug: {
           userKeys: Object.keys(user),
           shopify_id: user.shopify_id,
+          id: user.id,
           customerId: user.customerId,
           customer_id: user.customer_id
         }
@@ -333,7 +337,7 @@ router.post('/auth/add-address', async (req, res) => {
 
     // Create address in Shopify first
     try {
-      console.log('🛒 [ADD ADDRESS] Creating address in Shopify for customer:', user.shopify_id);
+      console.log('🛒 [ADD ADDRESS] Creating address in Shopify for customer:', shopifyCustomerId);
       
       const mutation = `
         mutation customerAddressCreate($customerId: ID!, $address: MailingAddressInput!) {
@@ -356,7 +360,7 @@ router.post('/auth/add-address', async (req, res) => {
       `;
 
       const variables = {
-        customerId: user.shopify_id,
+        customerId: shopifyCustomerId,
         address: {
           address1: address.address1,
           address2: address.address2 || '',
