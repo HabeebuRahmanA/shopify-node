@@ -42,9 +42,9 @@ app.get('/test', (req, res) => {
   });
 });
 
-// Mount auth and email routes
+// Mount routes - each route exports a router function
 app.use('/', authRoutes);
-app.use('/', shopifyRoutes);
+app.use('/', shopifyRoutes.router);
 app.use('/', cartRoutes);
 
 app.listen(PORT, () => {
