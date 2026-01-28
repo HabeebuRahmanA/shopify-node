@@ -282,10 +282,15 @@ async function createShopifyOrder(cartItems, shippingAddress, totalAmount, curre
     // Properly escape the order notes for GraphQL
     const escapedNotes = orderNotes.replace(/"/g, '\\"').replace(/\n/g, '\\n');
     
+    // Build the lineItems string manually to avoid double escaping
+    const lineItemsString = lineItems.map(item => 
+      `{variantId: "${item.variantId}", quantity: ${item.quantity}}`
+    ).join(', ');
+    
     const query = `
       mutation {
         orderCreate(input: {
-          lineItems: ${JSON.stringify(lineItems).replace(/"/g, '\\"')},
+          lineItems: [${lineItemsString}],
           shippingAddress: {
             address1: "${shippingAddress.address1 || ''}",
             address2: "${shippingAddress.address2 || ''}",
