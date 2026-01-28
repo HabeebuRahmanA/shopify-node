@@ -22,7 +22,41 @@ router.post('/test-email', async (req, res) => {
   res.json(result);
 });
 
-// Step 1: Send OTP
+// Step 1: Send OTP for registration (works even if user doesn't exist)
+router.post('/auth/send-otp-register', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email is required' });
+  }
+
+  try {
+    console.log('🔍 [REGISTER OTP] Sending OTP for registration:', email);
+    
+    // Generate OTP
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Store OTP (even if user doesn't exist)
+    await db.storeOTP(email, otp, expiresAt);
+    console.log('💾 [REGISTER OTP] OTP stored for registration:', email);
+
+    // Send OTP email
+    await sendOTPEmail(email, otp);
+    console.log('📧 [REGISTER OTP] OTP email sent for registration:', email);
+
+    res.json({
+      success: true,
+      message: 'OTP sent to your email for registration',
+      expiresIn: '10 minutes'
+    });
+  } catch (error) {
+    console.error('🔥 [REGISTER OTP] Error:', error.message);
+    res.status(500).json({ error: 'Failed to send OTP. Please try again.' });
+  }
+});
+
+// Send OTP for login (only works if user exists)
 router.post('/auth/send-otp', async (req, res) => {
   const { email } = req.body;
 
