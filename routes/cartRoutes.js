@@ -196,9 +196,16 @@ router.delete('/cart/clear-cart/:cartId', async (req, res) => {
 
 // Create COD order
 router.post('/orders/create-order', async (req, res) => {
-  const { userId, cartId, shippingAddress, paymentMethod = 'cod' } = req.body;
+  const { userId, cartId, shippingAddress, paymentMethod = 'cod', orderNotes = '' } = req.body;
+
+  console.log('🛒 [ORDER] Creating COD order');
+  console.log('📊 [ORDER] Request body:', JSON.stringify(req.body, null, 2));
 
   if (!userId || !cartId || !shippingAddress) {
+    console.log('❌ [ORDER] Missing required fields');
+    console.log('❌ [ORDER] userId:', userId);
+    console.log('❌ [ORDER] cartId:', cartId);
+    console.log('❌ [ORDER] shippingAddress:', shippingAddress);
     return res.status(400).json({ error: 'User ID, cart ID, and shipping address are required' });
   }
 
@@ -208,15 +215,22 @@ router.post('/orders/create-order', async (req, res) => {
     // Get cart details
     const cart = await db.getUserCart(userId);
     if (!cart || cart.items.length === 0) {
+      console.log('❌ [ORDER] Cart is empty');
       return res.status(400).json({ error: 'Cart is empty' });
     }
 
+    console.log('📊 [ORDER] Cart items:', cart.items.length);
+    console.log('📊 [ORDER] Cart ID:', cart.id);
+
     // Calculate total
     const totalAmount = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const currency = cart.items[0].currency;
+    const currency = cart.items[0]?.currency || 'USD';
+
+    console.log('📊 [ORDER] Total amount:', totalAmount);
+    console.log('📊 [ORDER] Currency:', currency);
 
     // Create Shopify order
-    const shopifyOrder = await createShopifyOrder(cart.items, shippingAddress, totalAmount, currency);
+    const shopifyOrder = await createShopifyOrder(cart.items, shippingAddress, totalAmount, currency, orderNotes);
     
     // Create order in our database
     const order = await db.createOrder(
@@ -226,10 +240,12 @@ router.post('/orders/create-order', async (req, res) => {
       currency,
       paymentMethod,
       shippingAddress,
-      cart.items
+      cart.items,
+      orderNotes
     );
 
     console.log('✅ [ORDER] COD order created successfully');
+    console.log('📊 [ORDER] Order ID:', order.id);
     
     res.json({
       success: true,
@@ -239,12 +255,13 @@ router.post('/orders/create-order', async (req, res) => {
     });
   } catch (error) {
     console.error('🔥 [ORDER] Error creating order:', error);
-    res.status(500).json({ error: 'Failed to create order' });
+    console.error('🔥 [ORDER] Full error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to create order', details: error.message });
   }
 });
 
 // Helper function to create Shopify order
-async function createShopifyOrder(cartItems, shippingAddress, totalAmount, currency) {
+async function createShopifyOrder(cartItems, shippingAddress, totalAmount, currency, orderNotes = '') {
   try {
     console.log('🛒 [SHOPIFY] Creating Shopify order...');
     
@@ -253,55 +270,10 @@ async function createShopifyOrder(cartItems, shippingAddress, totalAmount, curre
       quantity: item.quantity
     }));
 
-    const mutation = `
-      mutation orderCreate($input: OrderInput!) {
-        orderCreate(input: $input) {
-          order {
-            id
-            name
-            orderNumber
-            totalPrice
-            currencyCode
-            displayFinancialStatus
-            displayFulfillmentStatus
-            shippingAddress {
-              address1
-              address2
-              city
-              province
-              zip
-              country
-            }
-          }
-          userErrors {
-            field
-            message
-          }
-        }
-      }
-    `;
-
-    const variables = {
-      input: {
-        lineItems: lineItems,
-        shippingAddress: {
-          address1: shippingAddress.address1,
-          address2: shippingAddress.address2 || '',
-          city: shippingAddress.city,
-          province: shippingAddress.province,
-          zip: shippingAddress.zip,
-          country: shippingAddress.country
-        },
-        financialStatus: "PENDING",
-        note: "COD Order - Mobile App",
-        tags: "mobile-app, cod"
-      }
-    };
-
     const query = `
       mutation {
         orderCreate(input: {
-          lineItems: ${JSON.stringify(lineItems).replace(/"/g, '\\"')},
+          lineItems: ${JSON.stringify(lineItems).replace(/"/g, '\\\\"')},
           shippingAddress: {
             address1: "${shippingAddress.address1}",
             address2: "${shippingAddress.address2 || ''}",
@@ -311,22 +283,30 @@ async function createShopifyOrder(cartItems, shippingAddress, totalAmount, curre
             country: "${shippingAddress.country}"
           },
           financialStatus: PENDING,
-          note: "COD Order - Mobile App",
+          note: "COD Order - Mobile App${orderNotes.isNotEmpty ? ' - ' + orderNotes : ''}",
           tags: "mobile-app, cod"
-        }) {
-          order {
-            id
-            name
-            orderNumber
-            totalPrice
-            currencyCode
-            displayFinancialStatus
-            displayFulfillmentStatus
+        }
+      ) {
+        order {
+          id
+          name
+          orderNumber
+          totalPrice
+          currencyCode
+          displayFinancialStatus
+          displayFulfillmentStatus
+          shippingAddress {
+            address1
+            address2
+            city
+            province
+            zip
+            country
           }
-          userErrors {
-            field
-            message
-          }
+        }
+        userErrors {
+          field
+          message
         }
       }
     `;
