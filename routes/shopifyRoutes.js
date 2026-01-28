@@ -439,6 +439,147 @@ router.post('/orders/get-orders', async (req, res) => {
   }
 });
 
+// Get customer addresses using Admin API
+router.post('/addresses/get-addresses', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+
+  try {
+    console.log('🔍 [ADDRESSES] Fetching addresses for email:', email);
+    
+    // Check if environment variables are set
+    console.log('🔍 [ADDRESSES] Checking environment variables...');
+    console.log('🌐 [ADDRESSES] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
+    console.log('🔑 [ADDRESSES] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ADMIN_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+    
+    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
+      console.error('🔥 [ADDRESSES] Missing Shopify Admin environment variables');
+      return res.status(500).json({ error: 'Shopify Admin configuration missing' });
+    }
+    
+    console.log('📡 [ADDRESSES] Building GraphQL query...');
+    const query = `
+      query {
+        customers(first: 1, query: "email:${email}") {
+          edges {
+            node {
+              id
+              email
+              defaultAddress {
+                address1
+                address2
+                city
+                province
+                zip
+                country
+              }
+              addresses(first: 10) {
+                address1
+                address2
+                city
+                province
+                zip
+                country
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    console.log('📡 [ADDRESSES] Sending GraphQL query to Shopify Admin API...');
+    console.log('🔗 [ADDRESSES] Admin API URL:', SHOPIFY_ADMIN_API_URL);
+    
+    const data = await queryShopifyAdmin(query);
+    console.log('📊 [ADDRESSES] Shopify Admin response received');
+    console.log('📊 [ADDRESSES] Full response:', JSON.stringify(data, null, 2));
+    
+    if (data.customers && data.customers.edges.length > 0) {
+      const customer = data.customers.edges[0].node;
+      console.log('✅ [ADDRESSES] Customer found:', customer.email);
+      
+      const addresses = [];
+      
+      // Add default address first if it exists
+      if (customer.defaultAddress) {
+        console.log('🏠 [ADDRESSES] Default address found');
+        addresses.add({
+          ...customer.defaultAddress,
+          isDefault: true
+        });
+      }
+      
+      // Add other addresses
+      if (customer.addresses && customer.addresses.length > 0) {
+        console.log('📍 [ADDRESSES] Found ${customer.addresses.length} additional addresses');
+        customer.addresses.forEach(address => {
+          // Skip if it's the same as default address
+          const isDefault = customer.defaultAddress && 
+            customer.defaultAddress.address1 === address.address1 &&
+            customer.defaultAddress.city === address.city;
+          
+          if (!isDefault) {
+            addresses.push({
+              ...address,
+              isDefault: false
+            });
+          }
+        });
+      }
+      
+      console.log('✅ [ADDRESSES] Successfully processed addresses');
+      console.log('📊 [ADDRESSES] Total addresses:', addresses.length);
+      
+      res.json({
+        success: true,
+        addresses: addresses,
+        count: addresses.length,
+        defaultAddress: customer.defaultAddress,
+        message: `Found ${addresses.length} addresses`
+      });
+    } else {
+      console.log('⚠️ [ADDRESSES] No customer found for email:', email);
+      console.log('📊 [ADDRESSES] Customers array:', data.customers);
+      res.json({
+        success: true,
+        addresses: [],
+        count: 0,
+        message: 'No addresses found - customer not found'
+      });
+    }
+  } catch (error) {
+    console.error('🔥 [ADDRESSES] Error fetching addresses:', error.message);
+    console.error('🔥 [ADDRESSES] Full error details:', error);
+    console.error('🔥 [ADDRESSES] Error stack:', error.stack);
+    
+    // Check if it's a GraphQL error
+    if (error.message && error.message.includes('GraphQL')) {
+      console.error('🔥 [ADDRESSES] GraphQL error detected');
+      try {
+        const graphqlErrors = JSON.parse(error.message);
+        console.error('🔥 [ADDRESSES] GraphQL errors:', JSON.stringify(graphqlErrors, null, 2));
+        return res.status(500).json({ 
+          error: 'Shopify GraphQL API error',
+          details: graphqlErrors,
+          message: 'Invalid GraphQL query fields'
+        });
+      } catch (parseError) {
+        console.error('🔥 [ADDRESSES] Could not parse GraphQL error');
+      }
+    }
+    
+    console.error('🔥 [ADDRESSES] Sending 500 response to client');
+    res.status(500).json({ 
+      error: 'Failed to fetch addresses',
+      details: error.message,
+      message: 'Internal server error'
+    });
+  }
+});
+
 // Export the functions for use in other routes
 module.exports = {
   router,
