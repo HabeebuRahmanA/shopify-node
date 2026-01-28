@@ -285,6 +285,117 @@ router.post('/auth/register', async (req, res) => {
   }
 });
 
+// Add address for user
+router.post('/auth/add-address', async (req, res) => {
+  const { email, address } = req.body;
+
+  if (!email || !address) {
+    return res.status(400).json({ error: 'Email and address are required' });
+  }
+
+  if (!address.address1 || !address.city || !address.province || !address.zip || !address.country) {
+    return res.status(400).json({ error: 'All required address fields must be provided' });
+  }
+
+  try {
+    console.log('🔍 [ADD ADDRESS] Adding address for user:', email);
+    console.log('📍 [ADD ADDRESS] Address data:', JSON.stringify(address, null, 2));
+
+    // Get user from database
+    const user = await db.getUser(email);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Add address to local database
+    const addressData = {
+      user_id: user.id,
+      address1: address.address1,
+      address2: address.address2 || null,
+      city: address.city,
+      province: address.province,
+      zip: address.zip,
+      country: address.country,
+      is_default: address.isDefault || false,
+      created_at: new Date(),
+    };
+
+    const savedAddress = await db.addAddress(addressData);
+    console.log('✅ [ADD ADDRESS] Address saved to local database:', savedAddress.id);
+
+    // Try to add address to Shopify if user has Shopify customer ID
+    if (user.shopify_id) {
+      try {
+        console.log('🛒 [ADD ADDRESS] Adding address to Shopify for customer:', user.shopify_id);
+        
+        const mutation = `
+          mutation customerAddressCreate($customerId: ID!, $address: MailingAddressInput!) {
+            customerAddressCreate(customerId: $customerId, address: $address) {
+              customerAddress {
+                id
+                address1
+                address2
+                city
+                province
+                zip
+                country
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `;
+
+        const variables = {
+          customerId: user.shopify_id,
+          address: {
+            address1: address.address1,
+            address2: address.address2 || '',
+            city: address.city,
+            province: address.province,
+            zip: address.zip,
+            country: address.country,
+          }
+        };
+
+        const shopifyRoutes = require('./shopifyRoutes');
+        const { queryShopifyAdmin } = shopifyRoutes;
+        
+        const shopifyResponse = await queryShopifyAdmin(mutation, variables);
+        console.log('📊 [ADD ADDRESS] Shopify response:', JSON.stringify(shopifyResponse, null, 2));
+
+        if (shopifyResponse.customerAddressCreate && shopifyResponse.customerAddressCreate.customerAddress) {
+          const shopifyAddress = shopifyResponse.customerAddressCreate.customerAddress;
+          console.log('✅ [ADD ADDRESS] Address added to Shopify:', shopifyAddress.id);
+          
+          // Update local address with Shopify ID
+          await db.updateAddressShopifyId(savedAddress.id, shopifyAddress.id);
+        } else if (shopifyResponse.customerAddressCreate && shopifyResponse.customerAddressCreate.userErrors.length > 0) {
+          console.log('⚠️ [ADD ADDRESS] Shopify address creation errors:');
+          shopifyResponse.customerAddressCreate.userErrors.forEach(error => {
+            console.log(`   - Field: ${error.field}, Message: ${error.message}`);
+          });
+        }
+      } catch (shopifyError) {
+        console.log('⚠️ [ADD ADDRESS] Failed to add address to Shopify:', shopifyError.message);
+        // Continue with local address even if Shopify fails
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Address added successfully',
+      address: savedAddress
+    });
+  } catch (error) {
+    console.error('🔥 [ADD ADDRESS] Error:', error.message);
+    console.error('🔥 [ADD ADDRESS] Full error:', error);
+    res.status(500).json({ error: 'Server error. Please try again.' });
+  }
+});
+
 // Validate session
 router.post('/auth/validate', async (req, res) => {
   const { token } = req.body;

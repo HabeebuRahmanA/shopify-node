@@ -167,7 +167,62 @@ const db = {
     }
   },
 
-  // Cart Management Functions
+  // Add address for user
+  async addAddress(addressData) {
+    try {
+      const result = await sql`
+        INSERT INTO addresses (
+          user_id, address1, address2, city, province, zip, country, is_default, created_at
+        ) VALUES (
+          ${addressData.user_id}, 
+          ${addressData.address1}, 
+          ${addressData.address2}, 
+          ${addressData.city}, 
+          ${addressData.province}, 
+          ${addressData.zip}, 
+          ${addressData.country}, 
+          ${addressData.is_default}, 
+          ${addressData.created_at}
+        )
+        RETURNING id, user_id, address1, address2, city, province, zip, country, is_default, created_at
+      `;
+      return result[0];
+    } catch (error) {
+      console.error('Error adding address:', error);
+      throw error;
+    }
+  },
+
+  // Update address with Shopify ID
+  async updateAddressShopifyId(addressId, shopifyAddressId) {
+    try {
+      await sql`
+        UPDATE addresses 
+        SET shopify_address_id = ${shopifyAddressId}
+        WHERE id = ${addressId}
+      `;
+      console.log('✅ [DB] Address updated with Shopify ID');
+      return true;
+    } catch (error) {
+      console.error('Error updating address Shopify ID:', error);
+      throw error;
+    }
+  },
+
+  // Get user addresses
+  async getUserAddresses(userId) {
+    try {
+      const result = await sql`
+        SELECT * FROM addresses 
+        WHERE user_id = ${userId} 
+        ORDER BY is_default DESC, created_at DESC
+      `;
+      return result;
+    } catch (error) {
+      console.error('Error getting user addresses:', error);
+      throw error;
+    }
+  },
 
   // Create or get user's cart
   async createOrUpdateCart(userId) {
