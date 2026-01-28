@@ -167,59 +167,63 @@ const db = {
     }
   },
 
-  // Add address for user
-  async addAddress(addressData) {
+  // Add user address reference (simple approach - store in JSON field)
+  async addUserAddressReference(userId, addressReference) {
     try {
-      const result = await sql`
-        INSERT INTO addresses (
-          user_id, address1, address2, city, province, zip, country, is_default, created_at
-        ) VALUES (
-          ${addressData.user_id}, 
-          ${addressData.address1}, 
-          ${addressData.address2}, 
-          ${addressData.city}, 
-          ${addressData.province}, 
-          ${addressData.zip}, 
-          ${addressData.country}, 
-          ${addressData.is_default}, 
-          ${addressData.created_at}
-        )
-        RETURNING id, user_id, address1, address2, city, province, zip, country, is_default, created_at
-      `;
-      return result[0];
-    } catch (error) {
-      console.error('Error adding address:', error);
-      throw error;
-    }
-  },
-
-  // Update address with Shopify ID
-  async updateAddressShopifyId(addressId, shopifyAddressId) {
-    try {
+      // Get current user data
+      const user = await sql`SELECT * FROM users WHERE id = ${userId}`;
+      
+      if (user.length === 0) {
+        throw new Error('User not found');
+      }
+      
+      // Parse existing addresses or create new array
+      let existingAddresses = [];
+      if (user[0].addresses) {
+        try {
+          existingAddresses = JSON.parse(user[0].addresses);
+        } catch (e) {
+          existingAddresses = [];
+        }
+      }
+      
+      // Add new address reference
+      existingAddresses.push(addressReference);
+      
+      // Update user with new addresses array
       await sql`
-        UPDATE addresses 
-        SET shopify_address_id = ${shopifyAddressId}
-        WHERE id = ${addressId}
+        UPDATE users 
+        SET addresses = ${JSON.stringify(existingAddresses)}, updated_at = NOW()
+        WHERE id = ${userId}
       `;
-      console.log('✅ [DB] Address updated with Shopify ID');
-      return true;
+      
+      console.log('✅ [DB] Address reference added to user:', userId);
+      return addressReference;
     } catch (error) {
-      console.error('Error updating address Shopify ID:', error);
+      console.error('Error adding user address reference:', error);
       throw error;
     }
   },
 
-  // Get user addresses
-  async getUserAddresses(userId) {
+  // Get user addresses from stored references
+  async getUserAddressReferences(userId) {
     try {
       const result = await sql`
-        SELECT * FROM addresses 
-        WHERE user_id = ${userId} 
-        ORDER BY is_default DESC, created_at DESC
+        SELECT addresses FROM users WHERE id = ${userId}
       `;
-      return result;
+      
+      if (result.length === 0 || !result[0].addresses) {
+        return [];
+      }
+      
+      try {
+        return JSON.parse(result[0].addresses);
+      } catch (e) {
+        console.log('⚠️ [DB] Failed to parse addresses JSON:', e);
+        return [];
+      }
     } catch (error) {
-      console.error('Error getting user addresses:', error);
+      console.error('Error getting user address references:', error);
       throw error;
     }
   },

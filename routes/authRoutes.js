@@ -307,88 +307,102 @@ router.post('/auth/add-address', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Add address to local database
-    const addressData = {
-      user_id: user.id,
-      address1: address.address1,
-      address2: address.address2 || null,
-      city: address.city,
-      province: address.province,
-      zip: address.zip,
-      country: address.country,
-      is_default: address.isDefault || false,
-      created_at: new Date(),
-    };
-
-    const savedAddress = await db.addAddress(addressData);
-    console.log('✅ [ADD ADDRESS] Address saved to local database:', savedAddress.id);
-
-    // Try to add address to Shopify if user has Shopify customer ID
-    if (user.shopify_id) {
-      try {
-        console.log('🛒 [ADD ADDRESS] Adding address to Shopify for customer:', user.shopify_id);
-        
-        const mutation = `
-          mutation customerAddressCreate($customerId: ID!, $address: MailingAddressInput!) {
-            customerAddressCreate(customerId: $customerId, address: $address) {
-              customerAddress {
-                id
-                address1
-                address2
-                city
-                province
-                zip
-                country
-              }
-              userErrors {
-                field
-                message
-              }
-            }
-          }
-        `;
-
-        const variables = {
-          customerId: user.shopify_id,
-          address: {
-            address1: address.address1,
-            address2: address.address2 || '',
-            city: address.city,
-            province: address.province,
-            zip: address.zip,
-            country: address.country,
-          }
-        };
-
-        const shopifyRoutes = require('./shopifyRoutes');
-        const { queryShopifyAdmin } = shopifyRoutes;
-        
-        const shopifyResponse = await queryShopifyAdmin(mutation, variables);
-        console.log('📊 [ADD ADDRESS] Shopify response:', JSON.stringify(shopifyResponse, null, 2));
-
-        if (shopifyResponse.customerAddressCreate && shopifyResponse.customerAddressCreate.customerAddress) {
-          const shopifyAddress = shopifyResponse.customerAddressCreate.customerAddress;
-          console.log('✅ [ADD ADDRESS] Address added to Shopify:', shopifyAddress.id);
-          
-          // Update local address with Shopify ID
-          await db.updateAddressShopifyId(savedAddress.id, shopifyAddress.id);
-        } else if (shopifyResponse.customerAddressCreate && shopifyResponse.customerAddressCreate.userErrors.length > 0) {
-          console.log('⚠️ [ADD ADDRESS] Shopify address creation errors:');
-          shopifyResponse.customerAddressCreate.userErrors.forEach(error => {
-            console.log(`   - Field: ${error.field}, Message: ${error.message}`);
-          });
-        }
-      } catch (shopifyError) {
-        console.log('⚠️ [ADD ADDRESS] Failed to add address to Shopify:', shopifyError.message);
-        // Continue with local address even if Shopify fails
-      }
+    // Check if user has Shopify customer ID
+    if (!user.shopify_id) {
+      return res.status(400).json({ error: 'User does not have Shopify customer ID. Please register or login again.' });
     }
 
-    res.json({
-      success: true,
-      message: 'Address added successfully',
-      address: savedAddress
-    });
+    // Create address in Shopify first
+    try {
+      console.log('🛒 [ADD ADDRESS] Creating address in Shopify for customer:', user.shopify_id);
+      
+      const mutation = `
+        mutation customerAddressCreate($customerId: ID!, $address: MailingAddressInput!) {
+          customerAddressCreate(customerId: $customerId, address: $address) {
+            customerAddress {
+              id
+              address1
+              address2
+              city
+              province
+              zip
+              country
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const variables = {
+        customerId: user.shopify_id,
+        address: {
+          address1: address.address1,
+          address2: address.address2 || '',
+          city: address.city,
+          province: address.province,
+          zip: address.zip,
+          country: address.country,
+        }
+      };
+
+      const shopifyRoutes = require('./shopifyRoutes');
+      const { queryShopifyAdmin } = shopifyRoutes;
+      
+      const shopifyResponse = await queryShopifyAdmin(mutation, variables);
+      console.log('📊 [ADD ADDRESS] Shopify response:', JSON.stringify(shopifyResponse, null, 2));
+
+      if (shopifyResponse.customerAddressCreate && shopifyResponse.customerAddressCreate.customerAddress) {
+        const shopifyAddress = shopifyResponse.customerAddressCreate.customerAddress;
+        console.log('✅ [ADD ADDRESS] Address created in Shopify:', shopifyAddress.id);
+        
+        // Store reference in Neon (simple approach - just store the Shopify address ID)
+        const addressReference = {
+          user_id: user.id,
+          shopify_address_id: shopifyAddress.id,
+          address1: address.address1,
+          city: address.city,
+          is_default: address.isDefault || false,
+          created_at: new Date(),
+        };
+
+        // For now, store in a simple way - we can use a JSON field in users table or create a simple reference table
+        // Let's use a simple approach: store in users table as JSON array
+        await db.addUserAddressReference(user.id, addressReference);
+        console.log('✅ [ADD ADDRESS] Address reference stored in Neon');
+
+        res.json({
+          success: true,
+          message: 'Address added successfully',
+          address: {
+            id: shopifyAddress.id,
+            address1: shopifyAddress.address1,
+            address2: shopifyAddress.address2,
+            city: shopifyAddress.city,
+            province: shopifyAddress.province,
+            zip: shopifyAddress.zip,
+            country: shopifyAddress.country,
+            isDefault: address.isDefault || false,
+          }
+        });
+      } else if (shopifyResponse.customerAddressCreate && shopifyResponse.customerAddressCreate.userErrors.length > 0) {
+        console.log('❌ [ADD ADDRESS] Shopify address creation errors:');
+        shopifyResponse.customerAddressCreate.userErrors.forEach(error => {
+          console.log(`   - Field: ${error.field}, Message: ${error.message}`);
+        });
+        return res.status(400).json({ 
+          error: 'Failed to create address in Shopify',
+          details: shopifyResponse.customerAddressCreate.userErrors
+        });
+      } else {
+        throw new Error('Unknown Shopify response format');
+      }
+    } catch (shopifyError) {
+      console.log('⚠️ [ADD ADDRESS] Failed to create address in Shopify:', shopifyError.message);
+      return res.status(500).json({ error: 'Failed to create address in Shopify: ' + shopifyError.message });
+    }
   } catch (error) {
     console.error('🔥 [ADD ADDRESS] Error:', error.message);
     console.error('🔥 [ADD ADDRESS] Full error:', error);
