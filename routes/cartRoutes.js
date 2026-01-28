@@ -264,52 +264,66 @@ router.post('/orders/create-order', async (req, res) => {
 async function createShopifyOrder(cartItems, shippingAddress, totalAmount, currency, orderNotes = '') {
   try {
     console.log('🛒 [SHOPIFY] Creating Shopify order...');
+    console.log('📊 [SHOPIFY] Cart items:', JSON.stringify(cartItems, null, 2));
     
-    const lineItems = cartItems.map(item => ({
-      variantId: item.shopify_variant_id,
-      quantity: item.quantity
-    }));
+    const lineItems = cartItems.map(item => {
+      // Use variant_id instead of shopify_variant_id
+      const variantId = item.variant_id || item.shopify_variant_id;
+      console.log('📊 [SHOPIFY] Item variant ID:', variantId);
+      
+      return {
+        variantId: variantId,
+        quantity: item.quantity
+      };
+    });
 
+    console.log('📊 [SHOPIFY] Line items:', JSON.stringify(lineItems, null, 2));
+
+    // Properly escape the order notes for GraphQL
+    const escapedNotes = orderNotes.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+    
     const query = `
       mutation {
         orderCreate(input: {
-          lineItems: ${JSON.stringify(lineItems).replace(/"/g, '\\\\"')},
+          lineItems: ${JSON.stringify(lineItems).replace(/"/g, '\\"')},
           shippingAddress: {
-            address1: "${shippingAddress.address1}",
+            address1: "${shippingAddress.address1 || ''}",
             address2: "${shippingAddress.address2 || ''}",
-            city: "${shippingAddress.city}",
-            province: "${shippingAddress.province}",
-            zip: "${shippingAddress.zip}",
-            country: "${shippingAddress.country}"
+            city: "${shippingAddress.city || ''}",
+            province: "${shippingAddress.province || ''}",
+            zip: "${shippingAddress.zip || ''}",
+            country: "${shippingAddress.country || ''}"
           },
           financialStatus: PENDING,
-          note: "COD Order - Mobile App${orderNotes.isNotEmpty ? ' - ' + orderNotes : ''}",
+          note: "COD Order - Mobile App${escapedNotes ? ' - ' + escapedNotes : ''}",
           tags: "mobile-app, cod"
-        }
-      ) {
-        order {
-          id
-          name
-          orderNumber
-          totalPrice
-          currencyCode
-          displayFinancialStatus
-          displayFulfillmentStatus
-          shippingAddress {
-            address1
-            address2
-            city
-            province
-            zip
-            country
+        }) {
+          order {
+            id
+            name
+            orderNumber
+            totalPrice
+            currencyCode
+            displayFinancialStatus
+            displayFulfillmentStatus
+            shippingAddress {
+              address1
+              address2
+              city
+              province
+              zip
+              country
+            }
           }
-        }
-        userErrors {
-          field
-          message
+          userErrors {
+            field
+            message
+          }
         }
       }
     `;
+
+    console.log('📊 [SHOPIFY] GraphQL query:', query);
 
     const data = await queryShopifyAdmin(query);
     
