@@ -2,7 +2,35 @@ const express = require('express');
 const router = express.Router();
 
 const db = require('../db/db');
-const { queryShopifyAdmin } = require('./shopifyRoutes');
+
+// Shopify Admin API query function (inline to avoid circular dependency)
+async function queryShopifyAdmin(query) {
+  try {
+    const SHOPIFY_STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN;
+    const SHOPIFY_ADMIN_ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+    const SHOPIFY_ADMIN_API_URL = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/2024-01/graphql.json`;
+
+    const response = await fetch(SHOPIFY_ADMIN_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Shopify-Access-Token': SHOPIFY_ADMIN_ACCESS_TOKEN,
+      },
+      body: JSON.stringify({ query }),
+    });
+
+    const data = await response.json();
+
+    if (data.errors) {
+      throw new Error(`GraphQL error: ${JSON.stringify(data.errors)}`);
+    }
+
+    return data.data;
+  } catch (error) {
+    console.error('Shopify Admin API query error:', error);
+    throw error;
+  }
+}
 
 // Add item to cart
 router.post('/cart/add-item', async (req, res) => {
