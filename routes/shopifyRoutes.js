@@ -1063,9 +1063,8 @@ router.post('/shopify/get-product', async (req, res) => {
       return res.status(500).json({ error: 'Shopify Admin configuration missing' });
     }
     
-    // Simplified query to avoid potential GraphQL issues
-    const query = `
-      query getProduct($id: ID!) {
+    // Fixed GraphQL query for Admin API
+    const query = `query getProduct($id: ID!) {
         product(id: $id) {
           id
           title
@@ -1089,12 +1088,11 @@ router.post('/shopify/get-product', async (req, res) => {
             }
           }
         }
-      }
-    `;
+      }`;
     
     const variables = { id: product_id };
     
-    console.log('📡 [PRODUCT] Sending GraphQL query to Shopify Admin API... (v2)');
+    console.log('📡 [PRODUCT] Sending GraphQL query to Shopify Admin API... (v3 - FIXED PRICEV2)');
     console.log('📡 [PRODUCT] Query:', query.substring(0, 100) + '...');
     console.log('📡 [PRODUCT] Variables:', variables);
     
