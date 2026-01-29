@@ -1229,8 +1229,8 @@ router.post('/shopify/get-order', async (req, res) => {
             zip
             country
           }
-          financialStatus
-          fulfillmentStatus
+          displayFinancialStatus
+          displayFulfillmentStatus
         }
       }
     `;
