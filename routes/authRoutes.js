@@ -527,6 +527,42 @@ router.post('/auth/validate', async (req, res) => {
   }
 });
 
+// Get user ID by email
+router.post('/auth/get-user-id', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+
+  try {
+    console.log('🔍 [GET USER ID] Looking up user ID for email:', email);
+    
+    const user = await db.getUser(email);
+    
+    if (user) {
+      console.log('✅ [GET USER ID] User found:', user.id);
+      res.json({
+        success: true,
+        userId: user.id,
+        email: user.email
+      });
+    } else {
+      console.log('⚠️ [GET USER ID] User not found for email:', email);
+      res.status(404).json({ 
+        success: false, 
+        error: 'User not found' 
+      });
+    }
+  } catch (error) {
+    console.error('🔥 [GET USER ID] Error:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get user ID' 
+    });
+  }
+});
+
 // Logout
 router.post('/auth/logout', async (req, res) => {
   const { token } = req.body;
