@@ -506,7 +506,7 @@ router.post('/addresses/get-addresses', async (req, res) => {
       // Add default address first if it exists
       if (customer.defaultAddress) {
         console.log('🏠 [ADDRESSES] Default address found');
-        addresses.add({
+        addresses.push({
           ...customer.defaultAddress,
           isDefault: true
         });
