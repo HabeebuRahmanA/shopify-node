@@ -1043,6 +1043,120 @@ router.post('/customer/profile', async (req, res) => {
   }
 });
 
+// Get product details by ID using Admin API
+router.post('/shopify/get-product', async (req, res) => {
+  const { product_id, numeric_id } = req.body;
+
+  if (!product_id) {
+    return res.status(400).json({ error: 'Product ID required' });
+  }
+
+  try {
+    console.log('🔍 [PRODUCT] Fetching product details for:', product_id);
+    
+    // Check if environment variables are set
+    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
+      console.error('🔥 [PRODUCT] Missing Shopify Admin environment variables');
+      return res.status(500).json({ error: 'Shopify Admin configuration missing' });
+    }
+    
+    // Query Shopify Admin API for product details
+    const query = `
+      query getProduct($id: ID!) {
+        product(id: $id) {
+          id
+          title
+          handle
+          description
+          featuredImage {
+            url
+            altText
+          }
+          priceRangeV2 {
+            minVariantPrice {
+              amount
+              currencyCode
+            }
+          }
+          variants(first: 10) {
+            edges {
+              node {
+                id
+                title
+                sku
+                priceV2 {
+                  amount
+                  currencyCode
+                }
+                image {
+                  url
+                  altText
+                }
+                selectedOptions {
+                  name
+                  value
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+    
+    const variables = { id: product_id };
+    
+    console.log('📡 [PRODUCT] Sending GraphQL query to Shopify Admin API...');
+    const response = await queryShopifyAdmin(query, variables);
+    
+    if (response.product) {
+      const product = response.product;
+      console.log('✅ [PRODUCT] Product found:', product.title);
+      
+      // Find the specific variant if variant_id was provided
+      let variant = null;
+      if (numeric_id) {
+        variant = product.variants?.edges?.find(edge => 
+          edge.node.id.includes(numeric_id)
+        )?.node;
+      }
+      
+      // If no specific variant found, use the first one
+      if (!variant && product.variants?.edges?.length > 0) {
+        variant = product.variants.edges[0].node;
+      }
+      
+      res.json({
+        success: true,
+        product: {
+          id: product.id,
+          title: product.title,
+          handle: product.handle,
+          description: product.description,
+          featuredImage: product.featuredImage,
+          priceRange: product.priceRangeV2,
+          variant: variant,
+          image: variant?.image || product.featuredImage,
+          variant_title: variant?.title || '',
+        }
+      });
+    } else {
+      console.log('⚠️ [PRODUCT] Product not found');
+      res.status(404).json({ 
+        success: false, 
+        error: 'Product not found' 
+      });
+    }
+  } catch (error) {
+    console.error('🔥 [PRODUCT] Error fetching product:', error.message);
+    console.error('🔥 [PRODUCT] Full error details:', error);
+    
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch product details' 
+    });
+  }
+});
+
 // Export the functions for use in other routes
 module.exports = {
   router,
