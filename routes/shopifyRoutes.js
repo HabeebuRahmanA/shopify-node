@@ -1080,10 +1080,7 @@ router.post('/shopify/get-product', async (req, res) => {
               node {
                 id
                 title
-                priceV2 {
-                  amount
-                  currencyCode
-                }
+                price
                 image {
                   url
                   altText
