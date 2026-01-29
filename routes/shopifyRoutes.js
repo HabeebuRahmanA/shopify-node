@@ -1059,11 +1059,11 @@ router.post('/shopify/get-product', async (req, res) => {
     if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
       console.error('🔥 [PRODUCT] Missing Shopify Admin environment variables');
       console.error('🔥 [PRODUCT] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
-      console.error('🔥 [PRODUCT] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ADMIN_ACCESS_TOKEN ? 'SET' : 'NOT SET');
-      return res.status(500).json({ error: 'Shopify Admin configuration missing' });
+      console.error('🔥 [PRODUCT] SHOPIFY_STOREFRONT_ACCESS_TOKEN:', SHOPIFY_STOREFRONT_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+      return res.status(500).json({ error: 'Shopify Storefront configuration missing' });
     }
     
-    // Fixed GraphQL query for Admin API
+    // Storefront API GraphQL query for product details
     const query = `query getProduct($id: ID!) {
         product(id: $id) {
           id
@@ -1079,7 +1079,10 @@ router.post('/shopify/get-product', async (req, res) => {
               node {
                 id
                 title
-                price
+                priceV2 {
+                  amount
+                  currencyCode
+                }
                 image {
                   url
                   altText
@@ -1092,13 +1095,13 @@ router.post('/shopify/get-product', async (req, res) => {
     
     const variables = { id: product_id };
     
-    console.log('📡 [PRODUCT] Sending GraphQL query to Shopify Admin API... (v3 - FIXED PRICEV2)');
+    console.log('📡 [PRODUCT] Sending GraphQL query to Shopify Storefront API...');
     console.log('📡 [PRODUCT] Query:', query.substring(0, 100) + '...');
     console.log('📡 [PRODUCT] Variables:', variables);
     
-    const response = await queryShopifyAdmin(query, variables);
+    const response = await queryShopifyStorefront(query, variables);
     
-    console.log('📊 [PRODUCT] Shopify Admin response received');
+    console.log('📊 [PRODUCT] Shopify Storefront response received');
     console.log('📊 [PRODUCT] Response keys:', Object.keys(response));
     
     if (response.product) {
@@ -1111,11 +1114,6 @@ router.post('/shopify/get-product', async (req, res) => {
         variant = product.variants?.edges?.find(edge => 
           edge.node.id.includes(numeric_id)
         )?.node;
-      }
-      
-      // If no specific variant found, use the first one
-      if (!variant && product.variants?.edges?.length > 0) {
-        variant = product.variants.edges[0].node;
       }
       
       const result = {
@@ -1132,21 +1130,19 @@ router.post('/shopify/get-product', async (req, res) => {
         }
       };
       
-      console.log('✅ [PRODUCT] Returning product result:', result.product.title);
+      console.log('✅ [PRODUCT] Returning product result');
       res.json(result);
     } else {
-      console.log('⚠️ [PRODUCT] Product not found in response');
-      console.log('⚠️ [PRODUCT] Full response:', JSON.stringify(response, null, 2));
+      console.log('⚠️ [PRODUCT] Product not found');
       res.status(404).json({ 
         success: false, 
         error: 'Product not found',
-        debug: 'No product in Shopify response'
+        debug: 'No product in Storefront response'
       });
     }
   } catch (error) {
     console.error('🔥 [PRODUCT] Error fetching product:', error.message);
     console.error('🔥 [PRODUCT] Full error:', error);
-    console.error('🔥 [PRODUCT] Error stack:', error.stack);
     
     // Check for specific GraphQL errors
     if (error.message && error.message.includes('GraphQL')) {
