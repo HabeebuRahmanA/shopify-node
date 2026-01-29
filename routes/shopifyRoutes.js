@@ -1210,12 +1210,21 @@ router.post('/shopify/get-order', async (req, res) => {
                   title
                   price
                   image {
+                    id
                     url
                     altText
+                    src
+                    originalSrc
                   }
                   product {
                     id
                     title
+                    handle
+                    featuredImage {
+                      id
+                      url
+                      altText
+                    }
                   }
                 }
               }
