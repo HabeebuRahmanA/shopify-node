@@ -1169,23 +1169,25 @@ router.post('/shopify/get-order', async (req, res) => {
     console.log('🔍 [ORDER] Fetching order details for:', order_id);
     
     // Check if environment variables are set
-    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_STOREFRONT_ACCESS_TOKEN) {
-      console.error('🔥 [ORDER] Missing Shopify Storefront environment variables');
+    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
+      console.error('🔥 [ORDER] Missing Shopify Admin environment variables');
       console.error('🔥 [ORDER] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
-      console.error('🔥 [ORDER] SHOPIFY_STOREFRONT_ACCESS_TOKEN:', SHOPIFY_STOREFRONT_ACCESS_TOKEN ? 'SET' : 'NOT SET');
-      return res.status(500).json({ error: 'Shopify Storefront configuration missing' });
+      console.error('🔥 [ORDER] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ADMIN_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+      return res.status(500).json({ error: 'Shopify Admin configuration missing' });
     }
     
-    // Query Shopify Storefront API for order details
+    // Query Shopify Admin API for order details (Storefront API doesn't support order queries)
     const query = `
       query getOrder($id: ID!) {
         order(id: $id) {
           id
           name
           processedAt
-          totalPriceV2 {
-            amount
-            currencyCode
+          totalPriceSet {
+            shopMoney {
+              amount
+              currencyCode
+            }
           }
           lineItems(first: 20) {
             edges {
@@ -1193,13 +1195,16 @@ router.post('/shopify/get-order', async (req, res) => {
                 id
                 title
                 quantity
-                variant {
-                  id
-                  title
-                  priceV2 {
+                originalUnitPriceSet {
+                  shopMoney {
                     amount
                     currencyCode
                   }
+                }
+                variant {
+                  id
+                  title
+                  price
                   image {
                     id
                     url
@@ -1237,12 +1242,12 @@ router.post('/shopify/get-order', async (req, res) => {
     
     const variables = { id: order_id };
     
-    console.log('📡 [ORDER] Sending GraphQL query to Shopify Storefront API...');
+    console.log('📡 [ORDER] Sending GraphQL query to Shopify Admin API...');
     console.log('📡 [ORDER] Variables:', variables);
     
-    const response = await queryShopifyStorefront(query, variables);
+    const response = await queryShopifyAdmin(query, variables);
     
-    console.log('📊 [ORDER] Shopify Storefront response received');
+    console.log('📊 [ORDER] Shopify Admin response received');
     
     if (response.order) {
       const order = response.order;
@@ -1254,12 +1259,7 @@ router.post('/shopify/get-order', async (req, res) => {
           id: order.id,
           name: order.name,
           processedAt: order.processedAt,
-          totalPriceSet: {
-            shopMoney: {
-              amount: order.totalPriceV2.amount,
-              currencyCode: order.totalPriceV2.currencyCode
-            }
-          },
+          totalPriceSet: order.totalPriceSet,
           lineItems: order.lineItems,
           shippingAddress: order.shippingAddress,
           displayFinancialStatus: order.displayFinancialStatus,
@@ -1274,7 +1274,7 @@ router.post('/shopify/get-order', async (req, res) => {
       res.status(404).json({ 
         success: false, 
         error: 'Order not found',
-        debug: 'No order in Storefront response'
+        debug: 'No order in Admin response'
       });
     }
   } catch (error) {
