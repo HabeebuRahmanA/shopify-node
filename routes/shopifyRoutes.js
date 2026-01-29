@@ -1094,7 +1094,7 @@ router.post('/shopify/get-product', async (req, res) => {
     
     const variables = { id: product_id };
     
-    console.log('📡 [PRODUCT] Sending GraphQL query to Shopify Admin API...');
+    console.log('📡 [PRODUCT] Sending GraphQL query to Shopify Admin API... (v2)');
     console.log('📡 [PRODUCT] Query:', query.substring(0, 100) + '...');
     console.log('📡 [PRODUCT] Variables:', variables);
     
