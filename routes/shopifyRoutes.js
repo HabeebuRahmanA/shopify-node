@@ -1053,14 +1053,17 @@ router.post('/shopify/get-product', async (req, res) => {
 
   try {
     console.log('🔍 [PRODUCT] Fetching product details for:', product_id);
+    console.log('🔍 [PRODUCT] Numeric ID:', numeric_id);
     
     // Check if environment variables are set
     if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
       console.error('🔥 [PRODUCT] Missing Shopify Admin environment variables');
+      console.error('🔥 [PRODUCT] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
+      console.error('🔥 [PRODUCT] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ADMIN_ACCESS_TOKEN ? 'SET' : 'NOT SET');
       return res.status(500).json({ error: 'Shopify Admin configuration missing' });
     }
     
-    // Query Shopify Admin API for product details
+    // Simplified query to avoid potential GraphQL issues
     const query = `
       query getProduct($id: ID!) {
         product(id: $id) {
@@ -1072,18 +1075,11 @@ router.post('/shopify/get-product', async (req, res) => {
             url
             altText
           }
-          priceRangeV2 {
-            minVariantPrice {
-              amount
-              currencyCode
-            }
-          }
-          variants(first: 10) {
+          variants(first: 5) {
             edges {
               node {
                 id
                 title
-                sku
                 priceV2 {
                   amount
                   currencyCode
@@ -1091,10 +1087,6 @@ router.post('/shopify/get-product', async (req, res) => {
                 image {
                   url
                   altText
-                }
-                selectedOptions {
-                  name
-                  value
                 }
               }
             }
@@ -1106,7 +1098,13 @@ router.post('/shopify/get-product', async (req, res) => {
     const variables = { id: product_id };
     
     console.log('📡 [PRODUCT] Sending GraphQL query to Shopify Admin API...');
+    console.log('📡 [PRODUCT] Query:', query.substring(0, 100) + '...');
+    console.log('📡 [PRODUCT] Variables:', variables);
+    
     const response = await queryShopifyAdmin(query, variables);
+    
+    console.log('📊 [PRODUCT] Shopify Admin response received');
+    console.log('📊 [PRODUCT] Response keys:', Object.keys(response));
     
     if (response.product) {
       const product = response.product;
@@ -1125,7 +1123,7 @@ router.post('/shopify/get-product', async (req, res) => {
         variant = product.variants.edges[0].node;
       }
       
-      res.json({
+      const result = {
         success: true,
         product: {
           id: product.id,
@@ -1133,26 +1131,37 @@ router.post('/shopify/get-product', async (req, res) => {
           handle: product.handle,
           description: product.description,
           featuredImage: product.featuredImage,
-          priceRange: product.priceRangeV2,
           variant: variant,
           image: variant?.image || product.featuredImage,
           variant_title: variant?.title || '',
         }
-      });
+      };
+      
+      console.log('✅ [PRODUCT] Returning product result:', result.product.title);
+      res.json(result);
     } else {
-      console.log('⚠️ [PRODUCT] Product not found');
+      console.log('⚠️ [PRODUCT] Product not found in response');
+      console.log('⚠️ [PRODUCT] Full response:', JSON.stringify(response, null, 2));
       res.status(404).json({ 
         success: false, 
-        error: 'Product not found' 
+        error: 'Product not found',
+        debug: 'No product in Shopify response'
       });
     }
   } catch (error) {
     console.error('🔥 [PRODUCT] Error fetching product:', error.message);
-    console.error('🔥 [PRODUCT] Full error details:', error);
+    console.error('🔥 [PRODUCT] Full error:', error);
+    console.error('🔥 [PRODUCT] Error stack:', error.stack);
+    
+    // Check for specific GraphQL errors
+    if (error.message && error.message.includes('GraphQL')) {
+      console.error('🔥 [PRODUCT] GraphQL Error Details:', error.errors);
+    }
     
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to fetch product details' 
+      error: 'Failed to fetch product details',
+      debug: error.message
     });
   }
 });
