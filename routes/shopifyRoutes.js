@@ -1161,6 +1161,128 @@ router.post('/shopify/get-product', async (req, res) => {
   }
 });
 
+// Get order details by ID using Admin API
+router.post('/shopify/get-order', async (req, res) => {
+  const { order_id } = req.body;
+
+  if (!order_id) {
+    return res.status(400).json({ error: 'Order ID required' });
+  }
+
+  try {
+    console.log('🔍 [ORDER] Fetching order details for:', order_id);
+    
+    // Check if environment variables are set
+    if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_ACCESS_TOKEN) {
+      console.error('🔥 [ORDER] Missing Shopify Admin environment variables');
+      console.error('🔥 [ORDER] SHOPIFY_STORE_DOMAIN:', SHOPIFY_STORE_DOMAIN ? 'SET' : 'NOT SET');
+      console.error('🔥 [ORDER] SHOPIFY_ADMIN_ACCESS_TOKEN:', SHOPIFY_ADMIN_ACCESS_TOKEN ? 'SET' : 'NOT SET');
+      return res.status(500).json({ error: 'Shopify Admin configuration missing' });
+    }
+    
+    // Query Shopify Admin API for order details
+    const query = `
+      query getOrder($id: ID!) {
+        order(id: $id) {
+          id
+          name
+          processedAt
+          totalPriceSet {
+            shopMoney {
+              amount
+              currencyCode
+            }
+          }
+          lineItems(first: 20) {
+            edges {
+              node {
+                id
+                title
+                quantity
+                originalUnitPriceSet {
+                  shopMoney {
+                    amount
+                    currencyCode
+                  }
+                }
+                variant {
+                  id
+                  title
+                  price
+                  image {
+                    url
+                    altText
+                  }
+                  product {
+                    id
+                    title
+                  }
+                }
+              }
+            }
+          }
+          shippingAddress {
+            address1
+            address2
+            city
+            province
+            zip
+            country
+          }
+          financialStatus
+          fulfillmentStatus
+        }
+      }
+    `;
+    
+    const variables = { id: order_id };
+    
+    console.log('📡 [ORDER] Sending GraphQL query to Shopify Admin API...');
+    console.log('📡 [ORDER] Variables:', variables);
+    
+    const response = await queryShopifyAdmin(query, variables);
+    
+    console.log('📊 [ORDER] Shopify Admin response received');
+    
+    if (response.order) {
+      const order = response.order;
+      console.log('✅ [ORDER] Order found:', order.name);
+      
+      const result = {
+        success: true,
+        order: {
+          id: order.id,
+          name: order.name,
+          processedAt: order.processedAt,
+          totalPriceSet: order.totalPriceSet,
+          lineItems: order.lineItems,
+          shippingAddress: order.shippingAddress,
+          financialStatus: order.financialStatus,
+          fulfillmentStatus: order.fulfillmentStatus,
+        }
+      };
+      
+      console.log('✅ [ORDER] Returning order result');
+      res.json(result);
+    } else {
+      console.log('⚠️ [ORDER] Order not found');
+      res.status(404).json({ 
+        success: false, 
+        error: 'Order not found'
+      });
+    }
+  } catch (error) {
+    console.error('🔥 [ORDER] Error fetching order:', error.message);
+    console.error('🔥 [ORDER] Full error:', error);
+    
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch order details',
+      debug: error.message
+    });
+  }
+});
+
 // Export the functions for use in other routes
 module.exports = {
   router,
