@@ -1127,6 +1127,13 @@ router.post('/shopify/get-product', async (req, res) => {
           variant: variant,
           image: variant?.image || product.featuredImage,
           variant_title: variant?.title || '',
+          // Add price information for single-variant products
+          price: variant?.priceV2?.amount || 
+                   (product.variants?.edges?.[0]?.node?.priceV2?.amount) ||
+                   (product.variants?.[0]?.priceV2?.amount) ||
+                   product.priceRangeV2?.minVariantPrice?.amount ||
+                   product.price,
+          priceRangeV2: product.priceRangeV2,
         }
       };
       
